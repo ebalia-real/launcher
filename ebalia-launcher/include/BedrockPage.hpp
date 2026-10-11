@@ -12,13 +12,16 @@ enum class Platform { Windows, Linux, MacOS, Unsupported };
 Platform hostPlatform();
 // Build an argument vector, never a shell command. macOS bundles are opened with /usr/bin/open.
 Command localCommand(const QString &path, Platform platform);
-Command flatpakCommand(const QString &executable);
 }
-class QProcess;
+#include <functional>
 class BedrockPage : public QWidget {
 public:
     explicit BedrockPage(const QString &dataRoot, QWidget *parent = nullptr);
     ~BedrockPage() override;
+protected:
+    // Looks for the game again each time the page opens (it may have been installed from the Store meanwhile).
+    void showEvent(QShowEvent *event) override;
 private:
-    QProcess *m_probe = nullptr;
+    void refresh() {m_refresh();}
+    std::function<void()> m_refresh;
 };

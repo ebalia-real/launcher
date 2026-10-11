@@ -285,7 +285,7 @@ void McInstanceManager::install(const QString &dir) {
         const auto available = Loaders::versions(loader, game);
         if (lv.isEmpty() && !available.isEmpty()) { lv = available.first(); found = true; }
         else found = available.contains(lv);
-        if (!found || !ModRepository::safeName(lv)) fail("No hay una versión compatible de " + loader + " para " + game);
+        if (!found || !ModRepository::safeName(lv)) fail(QString("No hay una versión compatible de %1 para %2").arg(loader, game));
         auto lp = json(base + game + "/" + lv + "/profile/json");
         if (s(lp,"mainClass").isEmpty()) fail("Perfil del cargador incompleto.");
         profile["mainClass"]=lp["mainClass"]; info["loaderVersion"]=lv;
@@ -308,13 +308,13 @@ void McInstanceManager::install(const QString &dir) {
     emit installProgress(dir,5,"Descargando cliente…");
     download(profile["downloads"].toObject()["client"].toObject(),m_root+"/versions/"+game+"/"+game+".jar");
     if (loader == "forge" || loader == "neoforge") {
-        emit installProgress(dir,7,"Preparando instalador oficial de " + loader + "…");
+        emit installProgress(dir,7,QString("Preparando instalador oficial de %1…").arg(loader));
         QString java=javaFor(dir,info,profile);
         auto lv=s(info,"loaderVersion");auto available=Loaders::versions(loader,game);
         // Forge (and NeoForge for 1.20.1) versions carry the game version: modpacks often write only "47.1.106".
         if((loader=="forge"||(loader=="neoforge"&&game=="1.20.1"))&&!lv.isEmpty()&&!lv.startsWith(game+"-"))lv=game+"-"+lv;
         if(lv.isEmpty()&&!available.isEmpty())lv=available.first();
-        if(lv.isEmpty()||!available.contains(lv))fail("No hay una versión compatible de " + loader + " para " + game);
+        if(lv.isEmpty()||!available.contains(lv))fail(QString("No hay una versión compatible de %1 para %2").arg(loader, game));
         auto installer=Loaders::installerUrl(loader,game,lv);
         auto hash=QString::fromUtf8(ModRepository::fetch(QUrl(installer+".sha1"))).trimmed().section(' ',0,0);
         if(!QRegularExpression("^[a-fA-F0-9]{40}$").match(hash).hasMatch())fail("Hash del instalador inválido.");
@@ -334,7 +334,7 @@ void McInstanceManager::install(const QString &dir) {
             if(universal.isEmpty()||universal.contains('/')||universal.contains('\\')||!QFile::exists(unpack.path()+"/"+universal))fail("Perfil del instalador inválido.");
             const auto target=m_root+"/libraries/"+safeRelative(mavenPath(s(installInfo,"path")));
             QDir().mkpath(QFileInfo(target).absolutePath());QFile::remove(target);
-            if(!QFile::copy(unpack.path()+"/"+universal,target))fail("No se pudo instalar " + loader + ".");
+            if(!QFile::copy(unpack.path()+"/"+universal,target))fail(QString("No se pudo instalar %1.").arg(loader));
             QJsonArray clientLibs;
             for(const auto &l:loaderProfile["libraries"].toArray())if(l.toObject()["clientreq"].toBool(true))clientLibs.append(l); // clientreq:false = server only
             loaderProfile["libraries"]=clientLibs;

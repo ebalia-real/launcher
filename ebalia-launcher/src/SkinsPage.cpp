@@ -24,12 +24,12 @@ SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *in
     add(key("Restore local appearance"),[this]{
         QStringList names;QList<McInstance> targets;for(const auto &i:m_instances->instances())if(!m_instances->isRunning(i.dir)&&!m_instances->isInstalling(i.dir)){names<<i.name+" · "+i.mcVersion;targets<<i;}
         bool ok;auto value=QInputDialog::getItem(this,key("Restore local appearance"),key("Instance"),names,0,false,&ok);if(!ok||names.indexOf(value)<0)return;
-        try{SkinManager::removeLocal(targets[names.indexOf(value)].dir);m_details->setText(key("Local appearance restored."));}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",QString::fromUtf8(e.what()));}
+        try{SkinManager::removeLocal(targets[names.indexOf(value)].dir);m_details->setText(key("Local appearance restored."));}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
     });
     connect(m_accounts,&AccountManager::accountsChanged,this,[this]{refresh();});
     auto note=new QLabel(key("Microsoft skins are visible on servers. Local skins only change default textures on this client; other default players may also look different."));note->setWordWrap(true);note->setObjectName("muted");controls->addWidget(note);refresh();
 }
-void SkinsPage::refresh(){m_list->clear();try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();m_list->addItem(o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")));}if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(QString::fromUtf8(e.what()));}
+void SkinsPage::refresh(){m_list->clear();try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();m_list->addItem(o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")));}if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(Language::message(QString::fromUtf8(e.what())));}
     // The skin the Microsoft account wears now, from Mojang's profile service (cached), first in the list.
     const auto account=m_accounts->active();if(account.uuid.isEmpty())return;
     if(account.type!="msa"){showDefaultSkin(account.name,account.uuid);return;}
@@ -53,7 +53,7 @@ void SkinsPage::refresh(){m_list->clear();try{m_skins=SkinManager(m_root).skins(
 void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setPixmap(QPixmap::fromImage(SkinManager::preview(image,o["variant"].toString(),m_back)));m_details->setText(o["name"].toString());}
 void SkinsPage::importSkin(){
     auto file=QFileDialog::getOpenFileName(this,key("Import PNG skin"),{},"PNG (*.png)");if(file.isEmpty())return;QDialog dialog(this);dialog.setWindowTitle(key("Import PNG skin"));QFormLayout form(&dialog);QLineEdit name(QFileInfo(file).completeBaseName());QComboBox variant;variant.addItem(key("Classic"),"classic");variant.addItem(key("Slim"),"slim");form.addRow(key("Name"),&name);form.addRow(key("Model"),&variant);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);if(Ui::openWindow(dialog)!=QDialog::Accepted)return;
-    try{SkinManager(m_root).importSkin(file,name.text(),variant.currentData().toString());refresh();}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",QString::fromUtf8(e.what()));}
+    try{SkinManager(m_root).importSkin(file,name.text(),variant.currentData().toString());refresh();}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
 }
 void SkinsPage::apply(bool local){
     int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto skin=m_skins[index].toObject();auto file=skin["file"].toString(),variant=skin["variant"].toString();

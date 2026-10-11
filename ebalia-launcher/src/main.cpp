@@ -88,7 +88,7 @@ int main(int argc,char **argv){
     if(applying>=0&&!pending["nix"].toBool()) {
         try {return LauncherUpdater::applyPrepared(pending,root)?0:1;}
         catch(const std::exception &e){
-            QMessageBox::critical(nullptr,"EBALIA · Update",QString::fromUtf8(e.what()));
+            QMessageBox::critical(nullptr,"EBALIA",Language::message(QString::fromUtf8(e.what())));
             lock.unlock();
 #ifdef Q_OS_WIN
             const auto old=pending["destination"].toString()+"/ebalia-launcher.exe";

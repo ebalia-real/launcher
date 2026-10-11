@@ -30,6 +30,7 @@
 #include "CreatorDialog.hpp"
 #include "PatreonNewsPage.hpp"
 #include <QtWidgets>
+#include <QSplitter>
 #include <QtNetwork>
 #include <QtConcurrent>
 #include <QFutureWatcher>
@@ -160,15 +161,15 @@ private:
 };
 }
 namespace {
-// The mouse wheel scrolls the page: a drop-down list or number box only takes it once it was clicked (focused),
-// so scrolling over the language list in Settings no longer changes the language.
+// The mouse wheel scrolls the page: drop-down lists never take it (scrolling over the language list in Settings
+// never changes the language) and a number box only once it was clicked.
 class WheelGuard:public QObject {
 public:
     using QObject::QObject;
     bool eventFilter(QObject *object,QEvent *event) override {
         if(event->type()!=QEvent::Wheel)return false;
         auto widget=qobject_cast<QWidget*>(object);
-        if(!widget||!(qobject_cast<QComboBox*>(widget)||qobject_cast<QAbstractSpinBox*>(widget))||widget->hasFocus())return false;
+        if(!widget||!(qobject_cast<QComboBox*>(widget)||(qobject_cast<QAbstractSpinBox*>(widget)&&!widget->hasFocus())))return false;
         if(auto parent=widget->parentWidget())QCoreApplication::sendEvent(parent,event);
         return true;
     }
@@ -359,7 +360,40 @@ QWidget *MainWindow::buildExplore() {
     connect(m_modProvider,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;searchMods();});
     auto search=new QHBoxLayout;search->setSpacing(10);l->addLayout(search);m_query=new QLineEdit;m_query->setObjectName("modQuery");m_query->setPlaceholderText("Sodium, Dynamic Lights, FallingTree, Veinminer…");m_query->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_query->setClearButtonEnabled(true);search->addWidget(m_query,1);
     button(text("Buscar","Search","Buscar"),search,[this]{searchMods();},this,true,"search");connect(m_query,&QLineEdit::returnPressed,this,[this]{searchMods();});
-    m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);l->addWidget(m_results,1);
+    m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);
+    // Results on the left, the selected mod's page on the right.
+    auto split=new QSplitter(Qt::Horizontal);split->setObjectName("modSplit");split->setChildrenCollapsible(false);split->addWidget(m_results);l->addWidget(split,1);
+    auto panel=new QFrame;panel->setObjectName("modPreview");panel->setStyleSheet("#modPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#modPreview QLabel{background:transparent;}");panel->setMinimumWidth(320);panel->hide();split->addWidget(panel);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
+    auto pl=new QVBoxLayout(panel);pl->setContentsMargins(0,0,0,12);pl->setSpacing(10);
+    auto cover=new QLabel;cover->setObjectName("modPreviewCover");cover->setFixedHeight(170);cover->setAlignment(Qt::AlignCenter);cover->setStyleSheet("background:#141416;border-top-left-radius:12px;border-top-right-radius:12px;");pl->addWidget(cover);
+    auto head=new QHBoxLayout;head->setContentsMargins(16,0,16,0);head->setSpacing(12);pl->addLayout(head);auto logo=new QLabel;logo->setFixedSize(56,56);head->addWidget(logo,0,Qt::AlignTop);
+    auto names=new QVBoxLayout;names->setSpacing(2);head->addLayout(names,1);auto title=label({},names,"sectionTitle");auto meta=label({},names,"muted");
+    auto bodyView=new QTextBrowser;bodyView->setObjectName("modPreviewBody");bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("img{max-width:100%;} a{color:#6fd15b;}");pl->addWidget(bodyView,1);
+    auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
+    auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");
+    auto page=button(text("Abrir página","Open page","Abrir página"),actions,{},this,false,"external-link");actions->addStretch();
+    connect(install,&QPushButton::clicked,this,[this]{if(auto item=m_results->currentItem())installModNow(item->data(Qt::UserRole).toJsonObject());});
+    connect(page,&QPushButton::clicked,this,[page]{const QUrl url(page->property("url").toString());if(url.scheme()=="https")QDesktopServices::openUrl(url);});
+    connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page](QListWidgetItem *item){
+        if(!item){panel->hide();return;}panel->show();const auto p=item->data(Qt::UserRole).toJsonObject();const auto id=p["project_id"].toString();
+        title->setText(p["title"].toString());const auto downloads=p["downloads"].toInteger();
+        meta->setText(p["author"].toString()+(downloads>0?"  ·  "+QLocale(Language::current).toString(downloads)+" "+text("descargas","downloads","downloads"):QString()));
+        logo->setPixmap(item->icon().pixmap(56,56));cover->setPixmap({});cover->setText({});bodyView->setPlainText(p["description"].toString());
+        page->setProperty("url",p["provider"].toString()=="curseforge"?p["website"].toString():"https://modrinth.com/mod/"+p["slug"].toString());
+        const auto gallery=p["gallery"].toArray();const auto art=!gallery.isEmpty()?gallery.first().toString():p["featured_gallery"].toString();
+        if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),170)));});
+        // The full description, fetched quietly.
+        auto watcher=new QFutureWatcher<QJsonObject>(bodyView);auto root=m_root;
+        connect(watcher,&QFutureWatcher<QJsonObject>::finished,bodyView,[this,watcher,bodyView,cover,page,id]{
+            const auto d=watcher->result();watcher->deleteLater();auto current=m_results->currentItem();if(!current||current->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id||d.isEmpty())return;
+            const auto body=d["body"].toString();if(!body.isEmpty()){if(d["format"]=="html")bodyView->setHtml(body);else bodyView->setMarkdown(body);}
+            if(!d["url"].toString().isEmpty())page->setProperty("url",d["url"].toString());
+            const auto gallery=d["gallery"].toArray();if(cover->pixmap().isNull()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),170)));});
+        });
+        watcher->setFuture(QtConcurrent::run([root,id]{try{return ModRepository(root).details(id);}catch(...){return QJsonObject{};}}));
+    });
+    // Double-click installs the mod (with its dependencies) right away.
+    connect(m_results,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){installModNow(item->data(Qt::UserRole).toJsonObject());});
     auto browseRow=new Ui::ResponsiveRow(720);l->addWidget(browseRow);auto browse=browseRow->box();browse->setSpacing(10);
     button(text("Ver instalación y dependencias","Preview installation & dependencies","Ver instalação e dependências"),browse,[this]{QJsonArray projects;for(auto item:m_results->selectedItems()){auto p=item->data(Qt::UserRole).toJsonObject();projects.append(QJsonObject{{"project_id",p["project_id"]},{"name",p["title"]}});}if(!projects.isEmpty())preview(projects,m_target->currentData().toString());},this,true,"download");
     browse->addStretch();
@@ -612,6 +646,7 @@ void MainWindow::showPage(int i) {
     {QSignalBlocker block(m_nav);if(i==Settings){m_nav->setCurrentRow(-1);m_nav->clearSelection();}else m_nav->setCurrentRow(i);}
     m_navSettings->setChecked(i==Settings);
     // The mod list loads when the tab opens: popular mods for the selected instance until something is searched.
+    if(i==Explore&&m_target&&!m_selectedDir.isEmpty()){const int index=m_target->findData(m_selectedDir);if(index>=0&&index!=m_target->currentIndex()){m_target->setCurrentIndex(index);m_results->clear();}}
     if(i==Explore&&m_results&&m_results->count()==0&&!m_target->currentData().toString().isEmpty())searchMods();
 }
 void MainWindow::setLauncherUpdate(LauncherUpdate state,const QString &version){
@@ -1105,14 +1140,33 @@ void MainWindow::searchMods(int offset){
     if(m_jobs){QTimer::singleShot(400,this,[this,offset]{searchMods(offset);});return;}
     auto dir=m_target->currentData().toString();if(dir.isEmpty()){error(text("Creá una instancia con cargador de mods primero.","Create an instance with a mod loader first.","Crie uma instância com carregador de mods primeiro."));return;}
     QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}auto root=m_root,query=m_query->text(),provider=m_modProvider->currentData().toString();
-    work(Language::key("Searching provider…"),[root,query,info,offset,provider]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider)}};},[this,offset](QJsonObject r){
+    auto job=[root,query,info,offset,provider]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider)}};};
+    auto show=[this,offset](QJsonObject r){
         m_offset=offset;if(offset==0)m_results->clear();auto hits=r["hits"].toArray();m_results->setProperty("lastPage",hits.size()<30);
         for(const auto &v:hits){
             auto p=v.toObject();auto item=new QListWidgetItem(Ui::icon("puzzle",dim),p["title"].toString()+"  ·  "+p["author"].toString()+"\n"+p["description"].toString(),m_results);item->setData(Qt::UserRole,p);item->setToolTip(p["description"].toString());
             const auto url=p["icon_url"].toString();
             loadImage(url,[list=QPointer<QListWidget>(m_results),url](const QPixmap &icon){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toJsonObject()["icon_url"].toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(icon,QSize(88,88),14)));});
         }
-        if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));});
+        if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));};
+    if(offset==0){work(Language::key("Searching provider…"),job,show);return;}
+    // Further pages load quietly at the end of the list, without a progress bar.
+    if(m_results->property("loadingMore").toBool())return;m_results->setProperty("loadingMore",true);
+    auto watcher=new QFutureWatcher<QJsonObject>(this);
+    connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,show]{auto r=watcher->result();watcher->deleteLater();m_results->setProperty("loadingMore",false);if(!r.contains("error"))show(r);});
+    watcher->setFuture(QtConcurrent::run([job]{try{return job();}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));
+}
+void MainWindow::installModNow(const QJsonObject &project){
+    const auto dir=m_target->currentData().toString();if(dir.isEmpty())return;
+    if(m_mc->isRunning(dir)||m_installing.contains(dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
+    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}
+    QJsonArray installed;if(QFile::exists(dir+"/mods.json")){try{for(const auto &v:ModRepository::read(dir+"/mods.json")["mods"].toArray())if(QFile::exists(dir+"/mods/"+v.toObject()["filename"].toString()))installed.append(v);}catch(...){}}
+    auto root=m_root;const auto name=project["title"].toString();
+    work(text("Instalando %1…","Installing %1…","Instalando %1…").arg(name),[root,dir,info,project,installed]{
+        ModRepository repo(root);auto plan=repo.plan(QJsonArray{QJsonObject{{"project_id",project["project_id"]},{"name",project["title"]}}},info["mcVersion"].toString(),info["loader"].toString(),installed);
+        const auto missing=plan["missing"].toArray();if(!missing.isEmpty())throw std::runtime_error(missing.first().toObject()["reason"].toString().toStdString());
+        repo.apply(dir,plan);return QJsonObject{{"count",plan["versions"].toArray().size()}};
+    },[this,name](QJsonObject r){refreshInstances();m_status->setText(text("%1 instalado (%2 archivos con sus dependencias).","%1 installed (%2 files with its dependencies).","%1 instalado (%2 arquivos com dependências).").arg(name).arg(r["count"].toInt()));});
 }
 void MainWindow::account(bool microsoft){
     if(!microsoft){bool ok;const QString suggestion="Player";

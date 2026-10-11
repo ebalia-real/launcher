@@ -93,6 +93,7 @@ private:
     void applyPack();
     void preview(QJsonArray projects,QString dir);
     void searchMods(int offset=0);
+    void installModNow(const QJsonObject &project);
     void account(bool microsoft);
     void lostAction(bool launch);
     void lostSelection();

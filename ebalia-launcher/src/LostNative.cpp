@@ -115,7 +115,7 @@ Command command(const QJsonObject &spec,const QString &installDir,const QString 
         if(entry=="@lwjgl2"){for(const auto &a:lwjgl2Jars())classpath<<QDir::toNativeSeparators(librariesDir+"/"+a.path);continue;}
         if(entry=="@launchwrapper"){for(const auto &a:launchwrapper())classpath<<QDir::toNativeSeparators(librariesDir+"/"+a.path);continue;}
         const auto path=inside(installDir,entry);
-        if(!QFileInfo(path).exists())fail("A file of this lost version is missing: "+entry+". Reinstall it.");
+        if(!QFileInfo(path).exists())fail(QString("A file of this lost version is missing: %1. Reinstall it.").arg(entry));
         classpath<<QDir::toNativeSeparators(path);
     }
     out.arguments<<"-Duser.home="+home;out.environment.insert("APPDATA",home);

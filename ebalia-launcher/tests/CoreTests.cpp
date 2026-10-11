@@ -317,7 +317,9 @@ private slots:
         QTemporaryDir t;auto dep=[](QString v){return QJsonObject{{"dependency_type","required"},{"project_id","API"},{"version_id",v}};};
         auto one=version("A1","A","a.jar","a",QJsonArray{dep("API1")}),two=version("B1","B","b.jar","b",QJsonArray{dep("API2")});
         ModRepository repo(t.path(),[&](const QUrl &url){auto p=url.path();if(p.contains("project/A/"))return encode(QJsonArray{one});if(p.contains("project/B/"))return encode(QJsonArray{two});if(p.endsWith("API1"))return encode(version("API1","API","api.jar","api"));return encode(version("API2","API","api2.jar","api2"));});
-        auto p=repo.plan(QJsonArray{QJsonObject{{"project_id","A"}},QJsonObject{{"project_id","B"}}},"1.20.1","fabric");QCOMPARE(p["missing"].toArray().size(),1);QCOMPARE(p["versions"].toArray().size(),2);
+        // Two mods asking for different versions of one dependency: a single copy of it is installed, not an error.
+        auto p=repo.plan(QJsonArray{QJsonObject{{"project_id","A"}},QJsonObject{{"project_id","B"}}},"1.20.1","fabric");QCOMPARE(p["missing"].toArray().size(),0);QCOMPARE(p["versions"].toArray().size(),3);
+        int api=0;for(const auto &v:p["versions"].toArray())api+=v.toObject()["project_id"].toString()=="API";QCOMPARE(api,1);
     }
     void atomicMods(){
         QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("Test","1.20.1","fabric");
@@ -352,6 +354,16 @@ private slots:
             for(const auto &key:keys){QVERIFY2(!data[key].toString().trimmed().isEmpty(),qPrintable(code+": "+key));QVERIFY(!data[key].toString().contains(QChar::ReplacementCharacter));}
             Language::current=code;QVERIFY(!Language::standard("Cancel").isEmpty());QCOMPARE(Language::text("Guardar pack","Save pack","Salvar pack"),data["Save pack"].toString());
         }
+    }
+    void formattedMessages(){
+        // Errors and progress built with a detail inside are translated too, keeping the detail.
+        const auto previous=Language::current;
+        Language::current="en";QCOMPARE(Language::message("Recursos 3/10"),QString("Assets 3/10"));QCOMPARE(Language::message("No se pudo leer /tmp/a b.zip"),QString("Could not read /tmp/a b.zip"));
+        QCOMPARE(Language::message("Error de red (api.modrinth.com): timeout"),QString("Network error (api.modrinth.com): timeout"));
+        Language::current="es";QCOMPARE(Language::message("Could not write C:/x.jar"),QString("No se pudo escribir C:/x.jar"));QCOMPARE(Language::message("Assets 1/2"),QString("Recursos 1/2"));
+        Language::current="de";QVERIFY(Language::message("Bibliotecas 1/2").endsWith("1/2"));QVERIFY(!Language::message("Bibliotecas 1/2").startsWith("Bibliotecas"));
+        QCOMPARE(Language::message("Some remote error text"),QString("Some remote error text"));
+        Language::current=previous;
     }
     void curseForgeAdapter(){
         QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("CF","1.20.1","fabric");

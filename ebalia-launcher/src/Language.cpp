@@ -3,6 +3,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include <QRegularExpression>
+#include <algorithm>
 QString Language::current="es";
 namespace {
 const QMap<QString,QJsonObject> &catalogs(){
@@ -19,6 +21,30 @@ QString Language::message(QString value){
     const auto es=catalogs().value("es"),en=catalogs().value("en");
     for(auto it=es.begin();it!=es.end();++it)if(it.value().toString()==value)return catalogs().value(current).value(it.key()).toString(value);
     for(auto it=en.begin();it!=en.end();++it)if(it.key()==value)return catalogs().value(current).value(it.key()).toString(value);
+    // Messages with details inside ("Recursos 3/10", "Could not write C:/…"): an entry whose %1, %2… stand for the
+    // details, or whose text ends with a space and is followed by one (usually a file name or a host).
+    struct Pattern {QRegularExpression re;QString key;QList<int> order;int literal;};
+    static const auto patterns=[] {
+        QList<Pattern> out;const auto es=catalogs().value("es"),en=catalogs().value("en");
+        for(auto it=en.begin();it!=en.end();++it)for(const auto &source:{it.key(),es.value(it.key()).toString()}) {
+            static const QRegularExpression slot("%([1-9])");QString re="^";QList<int> order;qsizetype from=0;
+            for(auto m=slot.globalMatch(source);m.hasNext();) {auto s=m.next();re+=QRegularExpression::escape(source.mid(from,s.capturedStart()-from))+"(.*?)";order<<s.captured(1).toInt();from=s.capturedEnd();}
+            const int literal=int(source.size()-2*order.size());
+            if(order.isEmpty()&&source.endsWith(' ')&&source.trimmed().size()>=5){re+=QRegularExpression::escape(source)+"(.+)";order<<0;}
+            else if(order.isEmpty()||literal<5)continue;
+            else re+=QRegularExpression::escape(source.mid(from));
+            out.push_back({QRegularExpression(re+"$",QRegularExpression::DotMatchesEverythingOption),it.key(),order,literal});
+        }
+        std::stable_sort(out.begin(),out.end(),[](const Pattern &a,const Pattern &b){return a.literal>b.literal;});return out;
+    }();
+    for(const auto &p:patterns) {
+        const auto m=p.re.match(value);if(!m.hasMatch())continue;
+        const auto translated=catalogs().value(current).value(p.key).toString();if(translated.isEmpty())break;
+        if(p.order==QList<int>{0})return translated+m.captured(1);
+        QString out;static const QRegularExpression slot("%([1-9])");qsizetype from=0;
+        for(auto s=slot.globalMatch(translated);s.hasNext();) {auto t=s.next();const int at=int(p.order.indexOf(t.captured(1).toInt()));out+=translated.mid(from,t.capturedStart()-from)+(at<0?t.captured():m.captured(at+1));from=t.capturedEnd();}
+        return out+translated.mid(from);
+    }
     return value; // Remote API errors and game logs retain their original diagnostic text.
 }
 QString Language::standard(const QString &source){

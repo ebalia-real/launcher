@@ -1,3 +1,11 @@
+# 1.1.5
+
+- Bedrock without another launcher: on Windows EBALIA detects Minecraft for Windows and starts it directly (or opens its Microsoft Store page); on Linux it installs the Minecraft Linux runtime, imports the Minecraft APK you bought and starts the game itself. New Uninstall button (Windows worlds are copied first; on Linux worlds stay unless you choose to delete them).
+- Discover mods: a preview of the selected mod (picture, description, downloads), double-click to install, only mods for the instance's version, and no loading bar when more results load at the end of the list.
+- Two mods that need different versions of the same dependency (often Fabric API) no longer stop the install: the newest is kept.
+- Everything translated: the newer texts, the questions & answers, the tour and the installation, download, Java, skin, Bedrock and update messages, in all ten languages.
+- The mouse wheel never changes a drop-down list (like the language), even after clicking it.
+
 # 1.1.4
 
 - Discover mods loads popular mods as soon as the tab opens (and when the instance or provider changes); Enter searches even while another task runs, and scrolling to the end loads more results.

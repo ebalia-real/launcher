@@ -2,6 +2,7 @@
 #include "Download.hpp"
 #include "Archive.hpp"
 #include <QtCore>
+#include <QRegularExpression>
 #include <stdexcept>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -11,6 +12,7 @@
 #include <shellapi.h>
 #endif
 namespace {
+const QString runtimeId="io.mrarm.mcpelauncher";
 void run(const QString &exe,const QStringList &args) {
     QProcess p;p.start(exe,args);
     if(!p.waitForStarted(10000))throw std::runtime_error("No se pudo iniciar: "+exe.toStdString());
@@ -53,14 +55,10 @@ QString BedrockInstaller::install(const QString &root) {
     auto flatpak=QStandardPaths::findExecutable("flatpak");
     if(flatpak.isEmpty())throw std::runtime_error("Falta Flatpak. En NixOS habilitá services.flatpak.enable = true y reconstruí el sistema. Luego volvé a pulsar Instalar.");
     run(flatpak,{"remote-add","--user","--if-not-exists","flathub","https://flathub.org/repo/flathub.flatpakrepo"});
-    run(flatpak,{"install","--user","--noninteractive","--assumeyes","flathub","io.mrarm.mcpelauncher"});
+    run(flatpak,{"install","--user","--noninteractive","--assumeyes","flathub",runtimeId});
     return "flatpak";
-#elif defined(Q_OS_WIN) || defined(Q_OS_MACOS)
-#ifdef Q_OS_WIN
-    const QString repo="BedrockLauncher/BedrockLauncher",suffix=".zip";
-#else
+#elif defined(Q_OS_MACOS)
     const QString repo="minecraft-linux/macos-builder",suffix=".dmg";
-#endif
     QTemporaryDir stage(root+"/download-XXXXXX");
     if(!stage.isValid())throw std::runtime_error("No se pudo crear la carpeta temporal.");
     Download::file(QUrl("https://api.github.com/repos/"+repo+"/releases/latest"),stage.path()+"/release.json");
@@ -77,25 +75,6 @@ QString BedrockInstaller::install(const QString &root) {
     if(digest.startsWith("sha256:"))hash=digest.mid(7).toLatin1();
     Download::file(url,file,hash);
     const auto target=root+"/provider-"+QUuid::createUuid().toString(QUuid::WithoutBraces);
-#ifdef Q_OS_WIN
-    Archive::extract(file,target);
-    QDirIterator it(target,{"BedrockLauncher.exe"},QDir::Files,QDirIterator::Subdirectories);
-    if(!it.hasNext())throw std::runtime_error("El paquete no contiene BedrockLauncher.exe.");
-    auto executable=it.next();
-    // Upstream requires the desktop runtime, separate from the game license.
-    auto dotnet=QStandardPaths::findExecutable("dotnet");
-    if(dotnet.isEmpty())dotnet=qEnvironmentVariable("ProgramFiles")+"/dotnet/dotnet.exe";
-    QProcess runtimes;runtimes.start(dotnet,{"--list-runtimes"});
-    bool runtimeReady=runtimes.waitForStarted(5000)&&runtimes.waitForFinished(10000)
-        &&runtimes.readAllStandardOutput().contains("Microsoft.WindowsDesktop.App 8.");
-    if(!runtimeReady) {
-        auto winget=QStandardPaths::findExecutable("winget");
-        if(winget.isEmpty())throw std::runtime_error("Falta .NET Desktop Runtime 8 y no se encontró winget para instalarlo. Instalá App Installer y volvé a intentar.");
-        run(winget,{"install","--id","Microsoft.DotNet.DesktopRuntime.8","--exact","--accept-source-agreements","--accept-package-agreements","--disable-interactivity"});
-    }
-    installVcRuntime(root);
-    return executable;
-#else
     const auto mount=stage.path()+"/mount";
     QDir().mkpath(mount);
     run("/usr/bin/hdiutil",{"attach","-nobrowse","-readonly","-mountpoint",mount,file});
@@ -108,8 +87,101 @@ QString BedrockInstaller::install(const QString &root) {
     } catch(...) { try {run("/usr/bin/hdiutil",{"detach",mount});} catch(...) {} throw; }
     run("/usr/bin/hdiutil",{"detach",mount});
     return app;
-#endif
 #else
     throw std::runtime_error("Sistema no compatible con la instalación automática.");
 #endif
+}
+QString BedrockInstaller::windowsGame() {
+#ifdef Q_OS_WIN
+    QProcess p;p.start("powershell.exe",{"-NoProfile","-NonInteractive","-Command","(Get-AppxPackage -Name Microsoft.MinecraftUWP).Version"});
+    if(p.waitForStarted(5000)&&p.waitForFinished(20000)) {
+        const auto version=QString::fromUtf8(p.readAllStandardOutput()).trimmed().section('\n',0,0).trimmed();
+        if(!version.isEmpty())return version;
+    } else p.kill();
+    // Without PowerShell: the game registers the minecraft: link when it is installed.
+    QSettings link(R"(HKEY_CLASSES_ROOT\minecraft)",QSettings::NativeFormat);
+    return link.contains("URL Protocol")?"-":QString();
+#else
+    return {};
+#endif
+}
+bool BedrockInstaller::runtimeInstalled() {
+    const auto flatpak=QStandardPaths::findExecutable("flatpak");if(flatpak.isEmpty())return false;
+    QProcess p;p.start(flatpak,{"info",runtimeId});
+    return p.waitForStarted(5000)&&p.waitForFinished(15000)&&p.exitStatus()==QProcess::NormalExit&&p.exitCode()==0;
+}
+QString BedrockInstaller::gameData() {return QDir::homePath()+"/.var/app/"+runtimeId+"/data/mcpelauncher";}
+QStringList BedrockInstaller::versions() {
+    QStringList out;
+    for(const auto &dir:QDir(gameData()+"/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Time))
+        if(!QDir(dir.filePath()+"/lib").entryList({"*"},QDir::Dirs|QDir::NoDotAndDotDot).isEmpty())out<<dir.fileName();
+    return out;
+}
+QString BedrockInstaller::importGame(const QStringList &files) {
+    const auto flatpak=QStandardPaths::findExecutable("flatpak");
+    if(flatpak.isEmpty()||!runtimeInstalled())throw std::runtime_error("Install Bedrock first.");
+    // The runtime runs in a sandbox that only sees its own folder: the APKs are copied there to be extracted.
+    QDir().mkpath(gameData()+"/versions");
+    QTemporaryDir stage(gameData()+"/import-XXXXXX");
+    if(!stage.isValid())throw std::runtime_error("No se pudo crear la carpeta temporal.");
+    QStringList apks;int n=0;
+    for(const auto &file:files) {
+        const auto copy=stage.path()+QString("/%1.apk").arg(++n);
+        if(file.endsWith(".apk",Qt::CaseInsensitive)){if(!QFile::copy(file,copy))throw std::runtime_error(("Could not copy "+file).toStdString());apks<<copy;continue;}
+        const auto bundle=stage.path()+QString("/bundle-%1").arg(n);Archive::extract(file,bundle);
+        QDirIterator it(bundle,{"*.apk"},QDir::Files,QDirIterator::Subdirectories);
+        while(it.hasNext())apks<<it.next();
+    }
+    if(apks.isEmpty())throw std::runtime_error("No Minecraft APK was found in the chosen files.");
+    QString name=QFileInfo(files.front()).completeBaseName();
+    name.replace(QRegularExpression("[^A-Za-z0-9._-]+"),"-");if(name.isEmpty()||name.startsWith('.'))name="minecraft";
+    QString version=name;for(int i=2;QFileInfo::exists(gameData()+"/versions/"+version);++i)version=name+"-"+QString::number(i);
+    const auto target=gameData()+"/versions/"+version;
+    run(flatpak,QStringList{"run","--command=mcpelauncher-extract",runtimeId}+apks+QStringList{target});
+    QDirIterator game(target+"/lib",{"libminecraftpe.so"},QDir::Files,QDirIterator::Subdirectories);
+    if(!game.hasNext()){QDir(target).removeRecursively();throw std::runtime_error("These files are not Minecraft Bedrock for Android (libminecraftpe.so is missing). Choose the Minecraft APK, including its x86_64 or arm64 part.");}
+    return version;
+}
+#ifdef Q_OS_WIN
+namespace {
+void copyFolder(const QString &from,const QString &to) {
+    QDirIterator it(from,QDir::Files|QDir::Hidden|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);
+    while(it.hasNext()) {
+        const auto file=it.next();const auto target=to+"/"+QDir(from).relativeFilePath(file);
+        QDir().mkpath(QFileInfo(target).absolutePath());
+        if(!QFile::copy(file,target))throw std::runtime_error(("Could not copy "+file).toStdString());
+    }
+}
+}
+#endif
+QString BedrockInstaller::uninstall(const QString &root,bool deleteWorlds) {
+    QDir().mkpath(root);
+    QLockFile lock(root+"/install.lock");
+    if(!lock.tryLock())throw std::runtime_error("Ya hay una instalación de Bedrock en curso.");
+    QString backup;
+#if defined(Q_OS_WIN)
+    Q_UNUSED(deleteWorlds);
+    const auto worlds=qEnvironmentVariable("LOCALAPPDATA")+"/Packages/Microsoft.MinecraftUWP_8wekyb3d8bbwe/LocalState/games/com.mojang";
+    if(QDir(worlds).exists()) {
+        backup=root+"/worlds-backup-"+QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+        copyFolder(worlds,backup+"/com.mojang");
+    }
+    if(!windowsGame().isEmpty())
+        run("powershell.exe",{"-NoProfile","-NonInteractive","-Command","Get-AppxPackage -Name Microsoft.MinecraftUWP | Remove-AppxPackage -ErrorAction Stop"});
+#elif defined(Q_OS_LINUX)
+    if(runtimeInstalled()) {
+        const auto flatpak=QStandardPaths::findExecutable("flatpak");
+        QProcess user;user.start(flatpak,{"info","--user",runtimeId});
+        const bool mine=user.waitForStarted(5000)&&user.waitForFinished(15000)&&user.exitCode()==0;
+        run(flatpak,{"uninstall",mine?"--user":"--system","--noninteractive","--assumeyes",runtimeId});
+    }
+    // Downloaded game versions take gigabytes; worlds and settings stay unless the user asked to delete them.
+    if(deleteWorlds)QDir(QDir::homePath()+"/.var/app/"+runtimeId).removeRecursively();
+    else QDir(gameData()+"/versions").removeRecursively();
+#else
+    Q_UNUSED(deleteWorlds);
+#endif
+    // Managers installed by earlier versions of EBALIA (BedrockLauncher, the macOS app).
+    for(const auto &dir:QDir(root).entryInfoList({"provider-*"},QDir::Dirs|QDir::NoDotAndDotDot))QDir(dir.filePath()).removeRecursively();
+    return backup;
 }

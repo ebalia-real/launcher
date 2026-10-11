@@ -11,6 +11,7 @@ public:
     using Transport = std::function<QByteArray(const QUrl &)>;
     explicit ModRepository(QString root, Transport transport = {});
     QJsonArray search(const QString &query, const QString &game, const QString &loader, int offset = 0, const QString &provider = "modrinth");
+    QJsonObject details(const QString &projectId);
     QJsonObject plan(const QJsonArray &projects, const QString &game, const QString &loader, const QJsonArray &installed = {});
     void apply(const QString &instance, const QJsonObject &plan);
     QJsonObject capture(const QString &instance, const QString &name);

@@ -81,7 +81,7 @@ private slots:
         QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
         settings.setValue("provider/path",dir.path()+"/nonexistent");settings.sync();
         BedrockPage page(dir.path());page.resize(600,650);page.show();
-        auto launch=page.findChild<QPushButton*>("bedrockOpenManager");QVERIFY(launch);
+        auto launch=page.findChild<QPushButton*>("bedrockPlay");QVERIFY(launch);
         QTest::qWait(50);QVERIFY(!launch->isEnabled());
         QVERIFY(!page.findChild<QLabel*>("bedrockProviderStatus")->text().isEmpty());
     }
@@ -99,7 +99,7 @@ printf started > launched-marker
         QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
         settings.setValue("provider/path",exe);settings.sync();
         BedrockPage page(dir.path());page.show();
-        auto launch=page.findChild<QPushButton*>("bedrockOpenManager");
+        auto launch=page.findChild<QPushButton*>("bedrockPlay");
         QTRY_VERIFY(launch->isEnabled());launch->click();
         QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(dir.path()+"/launched-marker"),3000);
         auto path=page.findChild<QLineEdit*>("bedrockProviderPath");
@@ -402,7 +402,8 @@ printf started > launched-marker
         auto language=window.findChild<QComboBox*>("languageChoice");QVERIFY(language);const int before=language->currentIndex();
         auto wheel=[&](QWidget *w){QWheelEvent e(QPointF(10,10),w->mapToGlobal(QPointF(10,10)),QPoint(),QPoint(0,-120),Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);QApplication::sendEvent(w,&e);};
         window.setFocus();wheel(language);QCOMPARE(language->currentIndex(),before);
-        language->setFocus();QTest::qWait(20);if(language->hasFocus()){wheel(language);QVERIFY(language->currentIndex()!=before);}
+        // Not even after clicking it: lists never change with the wheel.
+        language->setFocus();QTest::qWait(20);wheel(language);QCOMPARE(language->currentIndex(),before);
     }
     void exploreModIcons(){
         if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
@@ -574,7 +575,7 @@ printf started > launched-marker
         auto accounts=window.findChild<AccountManager*>();QVERIFY(accounts);QCOMPARE(accounts->active().name,QString("Tester"));
         auto manager=window.findChild<McInstanceManager*>();QVERIFY(manager->isInstalling(manager->instances().first().dir));
         // The unknown version fails; close the error so the test does not wait on it.
-        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{if(auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))box->accept();});closer->start(50);
+        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto box=qobject_cast<QMessageBox*>(w);box&&box->isVisible())box->accept();});closer->start(50);
         QTRY_VERIFY_WITH_TIMEOUT(!manager->isInstalling(manager->instances().first().dir),60000);
     }
     void copyAndGroupThroughCore(){

@@ -1,5 +1,6 @@
 #include "ModRepository.hpp"
 #include "BuildConfig.hpp"
+#include "Language.hpp"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -79,7 +80,7 @@ QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArra
         delete reply;
         if (attempt < 2) QThread::msleep(400 * (attempt + 1));
     }
-    fail("Error de red (" + url.host() + "): " + lastError);
+    fail(QString("Error de red (%1): %2").arg(url.host(), lastError));
 }
 QByteArray ModRepository::get(const QUrl &url) { return m_transport ? m_transport(url) : fetch(url); }
 QJsonDocument ModRepository::api(const QString &path, const QList<QPair<QString, QString>> &items) {
@@ -91,18 +92,36 @@ QJsonDocument ModRepository::api(const QString &path, const QList<QPair<QString,
     return doc;
 }
 QJsonArray ModRepository::search(const QString &q, const QString &game, const QString &loader, int offset, const QString &provider) {
-    if (loader == "vanilla") fail("Elegí una instancia Fabric, Quilt, Forge o NeoForge para instalar mods.");
+    if (loader == "vanilla") fail(Language::text("Elegí una instancia Fabric, Quilt, Forge o NeoForge para instalar mods.","Choose a Fabric, Quilt, Forge or NeoForge instance to install mods.","Escolha uma instância Fabric, Quilt, Forge ou NeoForge para instalar mods."));
     if(provider=="curseforge") {
         int type=loader=="forge"?1:loader=="fabric"?4:loader=="quilt"?5:loader=="neoforge"?6:0;
         auto data=curse("mods/search",{{"gameId","432"},{"classId","6"},{"gameVersion",game},{"modLoaderType",QString::number(type)},
             {"searchFilter",q},{"sortField","2"},{"sortOrder","desc"},{"index",QString::number(offset)},{"pageSize","30"}}).object()["data"].toArray();
         QJsonArray hits;for(const auto &v:data){auto o=v.toObject();QStringList authors;for(const auto &a:o["authors"].toArray())authors<<a.toObject()["name"].toString();
-            hits.append(QJsonObject{{"project_id","cf-"+QString::number(o["id"].toInteger())},{"title",o["name"]},{"description",o["summary"]},{"author",authors.join(", ")},{"provider","curseforge"},{"slug",o["slug"]},{"website",o["links"].toObject()["websiteUrl"]},{"icon_url",o["logo"].toObject()["thumbnailUrl"]}});
+            // Only mods with a file for this exact game version and loader.
+            bool fits=false;for(const auto &f:o["latestFilesIndexes"].toArray())if(f.toObject()["gameVersion"].toString()==game&&f.toObject()["modLoader"].toInt()==type)fits=true;if(!fits&&!o["latestFilesIndexes"].toArray().isEmpty())continue;
+            QJsonArray gallery;for(const auto &shot:o["screenshots"].toArray())gallery.append(shot.toObject()["url"]);
+            hits.append(QJsonObject{{"project_id","cf-"+QString::number(o["id"].toInteger())},{"title",o["name"]},{"description",o["summary"]},{"author",authors.join(", ")},{"provider","curseforge"},{"slug",o["slug"]},{"website",o["links"].toObject()["websiteUrl"]},{"icon_url",o["logo"].toObject()["thumbnailUrl"]},{"downloads",o["downloadCount"]},{"gallery",gallery}});
         }return hits;
     }
     QJsonArray facets{QJsonArray{"project_type:mod"}, QJsonArray{"versions:" + game}, QJsonArray{"categories:" + loader}};
     return api("search", {{"query", q}, {"facets", QString::fromUtf8(QJsonDocument(facets).toJson(QJsonDocument::Compact))},
         {"limit", "30"}, {"offset", QString::number(offset)}}).object()["hits"].toArray();
+}
+QJsonObject ModRepository::details(const QString &projectId) {
+    // The full page of a mod for the Discover preview: description (Markdown on Modrinth, HTML on CurseForge) and pictures.
+    if (projectId.startsWith("cf-")) {
+        const auto id = projectId.mid(3);
+        const auto mod = curse("mods/" + id, {}).object()["data"].toObject();
+        QJsonArray gallery; for (const auto &shot : mod["screenshots"].toArray()) gallery.append(shot.toObject()["url"]);
+        return {{"body", curse("mods/" + id + "/description", {}).object()["data"].toString()}, {"format", "html"}, {"gallery", gallery},
+                {"downloads", mod["downloadCount"]}, {"url", mod["links"].toObject()["websiteUrl"]}};
+    }
+    if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(projectId).hasMatch()) fail("Invalid project.");
+    const auto project = api("project/" + projectId).object();
+    QJsonArray gallery; for (const auto &g : project["gallery"].toArray()) gallery.append(g.toObject()["url"]);
+    return {{"body", project["body"]}, {"format", "markdown"}, {"gallery", gallery}, {"downloads", project["downloads"]},
+            {"url", "https://modrinth.com/mod/" + project["slug"].toString()}};
 }
 QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString,QString>> &items) {
     QUrl url("https://api.curseforge.com/v1/"+path);QUrlQuery query;for(const auto &item:items)query.addQueryItem(item.first,item.second);url.setQuery(query);
@@ -156,15 +175,16 @@ void ModRepository::resolve(const QString &project, const QString &version, cons
             if ((str(a,"version_type") == "release") != (str(b,"version_type") == "release")) return str(a,"version_type") == "release";
             return str(a,"date_published") > str(b,"date_published");
         });
-        if (candidates.isEmpty()) fail(project + ": sin edición compatible con " + game + " / " + loader);
+        if (candidates.isEmpty()) fail(Language::text("%1 no tiene una versión para Minecraft %2 con %3.","%1 has no version for Minecraft %2 with %3.","%1 não tem versão para Minecraft %2 com %3.").arg(project,game,loader));
         v = candidates.first();
     }
     auto id = str(v, "project_id");
     if (id.isEmpty() || str(v,"id").isEmpty() || (!project.isEmpty() && project != id) || !compatible(v, game, loader))
-        fail(project + ": dependencia incompatible.");
+        fail(Language::text("%1: dependencia incompatible.","%1: incompatible dependency.","%1: dependência incompatível.").arg(project));
     if (selected.contains(id)) {
-        if (str(selected[id],"id") != str(v,"id")) fail(id + ": dos mods requieren versiones diferentes de la misma dependencia.");
-        return;
+        // Two mods ask for different versions of one dependency (often Fabric API): keep the newest, as those
+        // libraries stay compatible with older mods.
+        if (str(selected[id],"id") == str(v,"id") || str(selected[id],"date_published") >= str(v,"date_published")) return;
     }
     if (visiting.contains(id)) return;
     visiting.insert(id);
@@ -175,13 +195,13 @@ void ModRepository::resolve(const QString &project, const QString &version, cons
         if (!file.isEmpty() && file["primary"].toBool()) break;
     }
     if (!safeName(str(file,"filename")) || !str(file,"filename").endsWith(".jar") || (str(file["hashes"].toObject(),"sha512").size() != 128 && str(file["hashes"].toObject(),"sha1").size() != 40))
-        fail(id + ": archivo JAR o hash inválido.");
+        fail(Language::text("%1: archivo JAR o hash inválido.","%1: invalid JAR file or hash.","%1: arquivo JAR ou hash inválido.").arg(id));
     v["file"] = file;
     selected[id] = v;
     for (const auto &dv : v["dependencies"].toArray()) {
         auto d = dv.toObject();
         if (str(d,"dependency_type") == "required") {
-            if (str(d,"project_id").isEmpty() && str(d,"version_id").isEmpty()) fail(id + ": dependencia sin identificador.");
+            if (str(d,"project_id").isEmpty() && str(d,"version_id").isEmpty()) fail(Language::text("%1: dependencia sin identificador.","%1: dependency without an identifier.","%1: dependência sem identificador.").arg(id));
             resolve(str(d,"project_id"), str(d,"version_id"), game, loader, selected, visiting);
         }
     }
@@ -200,7 +220,7 @@ QJsonObject ModRepository::plan(const QJsonArray &projects, const QString &game,
 
     for (const auto &pv : projects) {
         auto p = pv.toObject(); auto id = str(p,"project_id");
-        if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(id).hasMatch()) fail("Identificador de mod inválido.");
+        if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(id).hasMatch()) fail(Language::text("Identificador de mod inválido.","Invalid mod identifier.","Identificador de mod inválido."));
         auto candidate = selected; QSet<QString> visiting;
         try { resolve(id, {}, game, loader, candidate, visiting); selected = candidate; roots.append(p); }
         catch (const std::exception &e) { missing.append(QJsonObject{{"name", p["name"]}, {"reason", QString::fromUtf8(e.what())}}); }
@@ -215,7 +235,7 @@ QJsonObject ModRepository::plan(const QJsonArray &projects, const QString &game,
             for (const auto &other : selected)
                 if ((!str(d,"version_id").isEmpty() && str(d,"version_id") == str(other,"id")) ||
                     (str(d,"version_id").isEmpty() && str(d,"project_id") == str(other,"project_id")))
-                    fail("El pack contiene mods declarados incompatibles entre sí.");
+                    fail(Language::text("Hay mods declarados incompatibles entre sí.","Some mods are declared incompatible with each other.","Há mods declarados incompatíveis entre si."));
         }
     }
     QJsonArray versions; for (const auto &v : selected) versions.append(v);
@@ -223,8 +243,8 @@ QJsonObject ModRepository::plan(const QJsonArray &projects, const QString &game,
 }
 void ModRepository::apply(const QString &instance, const QJsonObject &plan) {
     auto info = read(instance + "/instance.json");
-    if (info["mcVersion"] != plan["game"] || info["loader"] != plan["loader"]) fail("Cambió la versión de la instancia; calculá otra vez el pack.");
-    QLockFile lock(instance + "/mods.lock"); if (!lock.tryLock()) fail("Ya hay otra operación de mods en esta instancia.");
+    if (info["mcVersion"] != plan["game"] || info["loader"] != plan["loader"]) fail(Language::text("Cambió la versión de la instancia; volvé a intentarlo.","The instance version changed; try again.","A versão da instância mudou; tente novamente."));
+    QLockFile lock(instance + "/mods.lock"); if (!lock.tryLock()) fail(Language::text("Ya hay otra operación de mods en esta instancia.","Another mod operation is running on this instance.","Já há outra operação de mods nesta instância."));
     const QString mods = instance + "/mods"; QDir().mkpath(mods);
     if (QFileInfo(mods).isSymLink()) fail("La carpeta mods no puede ser un enlace simbólico.");
     QTemporaryDir stage(instance + "/.mods-stage-XXXXXX"); if (!stage.isValid()) fail("No se puede preparar la descarga.");
@@ -241,7 +261,7 @@ void ModRepository::apply(const QString &instance, const QJsonObject &plan) {
         auto data = get(QUrl(str(f,"url")));
         auto expected=f["hashes"].toObject();auto algorithm=expected.contains("sha512")?QCryptographicHash::Sha512:QCryptographicHash::Sha1;
         if (QCryptographicHash::hash(data, algorithm).toHex() != expected[algorithm==QCryptographicHash::Sha512?"sha512":"sha1"].toString().toLatin1())
-            fail("Falló la verificación de " + name + ". No se modificaron tus mods.");
+            fail(Language::text("Falló la verificación de %1. No se modificaron tus mods.","%1 failed verification. Your mods were not changed.","A verificação de %1 falhou. Seus mods não foram alterados.").arg(name));
         bytes(stage.path() + "/" + name, data);
         replaced.insert(str(v,"project_id"));
         merged.append(QJsonObject{{"project_id", v["project_id"]}, {"version_id", v["id"]},
@@ -289,7 +309,7 @@ void ModRepository::apply(const QString &instance, const QJsonObject &plan) {
 QJsonObject ModRepository::capture(const QString &instance, const QString &name) {
     QJsonArray projects; QSet<QString> ids;
     const auto files = QDir(instance + "/mods").entryList({"*.jar"}, QDir::Files);
-    if (files.isEmpty()) fail("Esta instancia todavía no tiene mods activos.");
+    if (files.isEmpty()) fail(Language::text("Esta instancia todavía no tiene mods activos.","This instance has no enabled mods yet.","Esta instância ainda não tem mods ativos."));
     QJsonArray managed;if(QFile::exists(instance+"/mods.json"))managed=read(instance+"/mods.json")["mods"].toArray();
     for (const auto &file : files) {
         auto hash = QCryptographicHash::hash(fileBytes(instance + "/mods/" + file), QCryptographicHash::Sha512).toHex();
