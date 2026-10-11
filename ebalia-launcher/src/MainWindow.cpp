@@ -160,6 +160,19 @@ private:
 };
 }
 namespace {
+// The mouse wheel scrolls the page: a drop-down list or number box only takes it once it was clicked (focused),
+// so scrolling over the language list in Settings no longer changes the language.
+class WheelGuard:public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject *object,QEvent *event) override {
+        if(event->type()!=QEvent::Wheel)return false;
+        auto widget=qobject_cast<QWidget*>(object);
+        if(!widget||!(qobject_cast<QComboBox*>(widget)||qobject_cast<QAbstractSpinBox*>(widget))||widget->hasFocus())return false;
+        if(auto parent=widget->parentWidget())QCoreApplication::sendEvent(parent,event);
+        return true;
+    }
+};
 class TaskBarFilter:public QObject {
 public:
     explicit TaskBarFilter(QStatusBar *bar):QObject(bar),m_bar(bar){}
@@ -175,6 +188,7 @@ private:
 };
 }
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
+    {static WheelGuard *guard=nullptr;if(!guard){guard=new WheelGuard(qApp);qApp->installEventFilter(guard);}}
     // The window's own status bar only holds background tasks (installs, updates): hidden while it has none,
     // so no empty strip shows under the page.
     {auto bar=statusBar();bar->setSizeGripEnabled(false);bar->hide();
@@ -552,6 +566,25 @@ QWidget *MainWindow::buildSettings() {
             Ui::setTheme(id);qApp->setStyleSheet(Ui::styleSheet());
             for(int n=0;n<themeRow->count();++n)if(auto b=qobject_cast<QPushButton*>(themeRow->itemAt(n)->widget()))b->setChecked(b->property("theme").toString()==id);});
     }
+    // Your own colours.
+    auto custom=new QPushButton(text("Personalizado…","Custom…","Personalizado…"));custom->setObjectName("themeChoice");custom->setProperty("theme","custom");custom->setCheckable(true);custom->setChecked(Ui::theme()=="custom");custom->setCursor(Qt::PointingHandCursor);
+    {QPixmap dot(14,14);dot.fill(Qt::transparent);QPainter p(&dot);p.setRenderHint(QPainter::Antialiasing);QConicalGradient g(7,7,0);for(int n=0;n<=6;++n)g.setColorAt(n/6.0,QColor::fromHsv((n*60)%360,200,230));p.setBrush(g);p.setPen(Qt::NoPen);p.drawEllipse(0,0,14,14);p.end();custom->setIcon(QIcon(dot));}
+    themeRow->addWidget(custom,themeIndex/3,themeIndex%3);
+    connect(custom,&QPushButton::clicked,this,[this,themeRow,custom]{
+        custom->setChecked(Ui::theme()=="custom");
+        QDialog d(this);d.setObjectName("customThemeWindow");d.setWindowTitle(text("Tema personalizado","Custom theme","Tema personalizado"));auto form=new QFormLayout(&d);form->setContentsMargins(20,18,20,16);form->setSpacing(12);
+        QColor accent=Ui::customAccent(),background=Ui::customBackground();
+        auto swatch=[](QPushButton *b,const QColor &c){b->setText(" "+c.name().toUpper());QPixmap px(18,18);px.fill(c);b->setIcon(QIcon(px));};
+        auto accentButton=new QPushButton;accentButton->setObjectName("customAccent");swatch(accentButton,accent);auto backgroundButton=new QPushButton;backgroundButton->setObjectName("customBackground");swatch(backgroundButton,background);
+        form->addRow(text("Color de acento","Accent colour","Cor de destaque"),accentButton);form->addRow(text("Fondo","Background","Fundo"),backgroundButton);
+        auto note=new QLabel(text("El acento colorea botones, selecciones y enlaces. El fondo tiñe las ventanas y tarjetas; elegí un color oscuro para que el texto se lea bien.","The accent colours buttons, selections and links. The background tints windows and cards; choose a dark colour so text stays readable.","O destaque colore botões, seleções e links. O fundo tinge janelas e cartões; escolha uma cor escura para o texto continuar legível."));note->setWordWrap(true);note->setObjectName("muted");form->addRow(note);
+        connect(accentButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(accent,&d,text("Color de acento","Accent colour","Cor de destaque"));if(c.isValid()){accent=c;swatch(accentButton,c);}});
+        connect(backgroundButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(background,&d,text("Fondo","Background","Fundo"));if(c.isValid()){background=c;swatch(backgroundButton,c);}});
+        auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);connect(buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
+        if(Ui::openWindow(d)!=QDialog::Accepted)return;
+        Ui::setCustomTheme(accent,background);qApp->setStyleSheet(Ui::styleSheet());
+        for(int n=0;n<themeRow->count();++n)if(auto b=qobject_cast<QPushButton*>(themeRow->itemAt(n)->widget()))b->setChecked(b->property("theme").toString()=="custom");
+    });
     // Java and diagnostics
     auto java=settingsCard(column,"wrench",k("Setup & diagnostics"),k("Java, OpenGL, OpenAL and Wine checks for every version. EBALIA downloads the Java each version needs."));
     auto javaRow=new QHBoxLayout;java->addLayout(javaRow);button(k("Setup & diagnostics"),javaRow,[this]{SetupDialog dialog(this);Ui::openWindow(dialog);},this,false,"wrench");javaRow->addStretch();

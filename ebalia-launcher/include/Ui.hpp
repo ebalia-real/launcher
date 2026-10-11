@@ -31,6 +31,10 @@ struct Theme { QString id, name; int accentHue; int backgroundHue; double backgr
 QList<Theme> themes();
 QString theme();
 void setTheme(const QString &id);
+// Theme "custom": colours chosen by the player.
+QColor customAccent();
+QColor customBackground();
+void setCustomTheme(const QColor &accent,const QColor &background);
 // A colour of the EBALIA (green) theme in the current theme.
 QColor themed(const QColor &color);
 QColor accent();

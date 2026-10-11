@@ -52,6 +52,8 @@ QJsonObject ModRepository::read(const QString &path) {
 void ModRepository::write(const QString &path, const QJsonObject &o) { bytes(path, QJsonDocument(o).toJson()); }
 QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers) {
     if (url.scheme() != "https") fail("La descarga requiere HTTPS: " + url.host());
+    // Offline mode (tests, EBALIA_NO_NETWORK): fail at once instead of waiting on timeouts.
+    if (qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")) fail("Sin conexión: " + url.host());
     // One manager per thread keeps connections open between requests (keep-alive and HTTP/2), as Prism Launcher does:
     // thousands of small game assets no longer pay a new TLS handshake each.
     static QThreadStorage<QNetworkAccessManager *> managers;

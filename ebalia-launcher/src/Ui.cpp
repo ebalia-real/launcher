@@ -1,3 +1,4 @@
+#include <QPointer>
 #include <QSettings>
 #include <QRegularExpression>
 #include <QFileInfo>
@@ -100,6 +101,19 @@ void Ui::fitToScreen(QWidget *window,QSize preferred){
     auto screen=window->screen()?window->screen():QGuiApplication::primaryScreen();if(!screen){window->resize(preferred);return;}
     auto available=screen->availableGeometry().size()*0.92;window->resize(preferred.boundedTo(available));
 }
+namespace {
+// Blocks clicks, the wheel and keys on the launcher behind a dialog without disabling it (disabled widgets turn grey).
+class InputShield:public QObject {
+public:
+    QList<QPointer<QWidget>> blocked;
+    bool eventFilter(QObject *object,QEvent *event) override {
+        switch(event->type()){case QEvent::MouseButtonPress:case QEvent::MouseButtonRelease:case QEvent::MouseButtonDblClick:case QEvent::Wheel:case QEvent::KeyPress:case QEvent::KeyRelease:case QEvent::Shortcut:case QEvent::ContextMenu:break;default:return false;}
+        auto widget=qobject_cast<QWidget*>(object);if(!widget)return false;
+        for(const auto &w:blocked)if(w&&(w==widget||w->isAncestorOf(widget)))return true;
+        return false;
+    }
+};
+}
 int Ui::openWindow(QDialog &dialog){
     QList<QPointer<QWidget>> blocked;
     // Keep the launcher behind ordinary dialogs inert. Fan-art viewers stay
@@ -111,13 +125,11 @@ int Ui::openWindow(QDialog &dialog){
                 if(!child->isWindow()&&child->isEnabled()) blocked<<child;
         }
     }
-    for(auto &w:blocked)if(w)w->setEnabled(false);
-    // A dialog parented to a page inside the blocked area would be disabled with it; a window can be re-enabled on its own.
-    dialog.setEnabled(true);
+    InputShield shield;shield.blocked=blocked;qApp->installEventFilter(&shield);
     dialog.setWindowModality(Qt::NonModal);dialog.setSizeGripEnabled(true);
     QEventLoop loop;QObject::connect(&dialog,&QDialog::finished,&loop,&QEventLoop::exit);
     ++windowsOpen;dialog.show();dialog.raise();dialog.activateWindow();const int result=loop.exec();--windowsOpen;
-    for(auto &w:blocked)if(w)w->setEnabled(true);
+    qApp->removeEventFilter(&shield);
     return dialog.isVisible()?(dialog.hide(),QDialog::Rejected):result;
 }
 static QString baseStyleSheet(){return QStringLiteral(R"(
@@ -193,13 +205,22 @@ QList<Ui::Theme> Ui::themes(){
             {"ocean",Language::text("Océano (azul)","Ocean (blue)","Oceano (azul)"),212,218,0.26},
             {"cherry",Language::text("Cerezo (rosa)","Cherry (pink)","Cerejeira (rosa)"),330,330,0.16}};
 }
-QString Ui::theme(){const auto id=QSettings().value("ui/theme","ebalia").toString();for(const auto &t:themes())if(t.id==id)return id;return "ebalia";}
+QString Ui::theme(){const auto id=QSettings().value("ui/theme","ebalia").toString();if(id=="custom")return id;for(const auto &t:themes())if(t.id==id)return id;return "ebalia";}
+QColor Ui::customAccent(){return QSettings().value("ui/themeAccent",QColor(111,209,91)).value<QColor>();}
+QColor Ui::customBackground(){return QSettings().value("ui/themeBackground",QColor(20,20,22)).value<QColor>();}
+void Ui::setCustomTheme(const QColor &accent,const QColor &background){QSettings settings;settings.setValue("ui/themeAccent",accent);settings.setValue("ui/themeBackground",background);settings.setValue("ui/theme","custom");}
 void Ui::setTheme(const QString &id){QSettings().setValue("ui/theme",id);}
 QColor Ui::themed(const QColor &color){
     const auto id=theme();if(id=="ebalia")return color;Theme t;for(const auto &x:themes())if(x.id==id)t=x;
+    float accentSaturation=-1,backgroundShift=0;
+    if(id=="custom"){
+        // Your own colours: the accent's hue and saturation; the background's hue, tint and brightness.
+        float ah,as,al,aa,bh,bs,bl,ba;customAccent().getHslF(&ah,&as,&al,&aa);customBackground().getHslF(&bh,&bs,&bl,&ba);
+        t.accentHue=ah<0?0:int(ah*360);accentSaturation=as;t.backgroundHue=bh<0?0:int(bh*360);t.backgroundSaturation=bh<0?0:qMin(bs,0.6f);backgroundShift=bl-0.08f; // EBALIA's window is 8% light
+    }
     float h,s,l,a;color.getHslF(&h,&s,&l,&a);const int hue=h<0?-1:int(h*360);
-    if(hue>=70&&hue<=150&&s>0.18)return QColor::fromHslF(t.accentHue/360.0f,s,l,a);          // EBALIA's greens become the accent
-    if(s<0.12&&l<0.36)return QColor::fromHslF(t.backgroundHue/360.0f,float(t.backgroundSaturation),l,a); // dark greys take its tint
+    if(hue>=70&&hue<=150&&s>0.18)return QColor::fromHslF(t.accentHue/360.0f,accentSaturation<0?s:qBound(0.0f,accentSaturation,1.0f),l,a); // EBALIA's greens become the accent
+    if(s<0.12&&l<0.36)return QColor::fromHslF(t.backgroundHue/360.0f,float(t.backgroundSaturation),qBound(0.0f,l+backgroundShift,0.9f),a); // dark greys take its tint
     return color;
 }
 QColor Ui::accent(){return themed(QColor(111,209,91));}

@@ -1,6 +1,9 @@
 # 1.1.4
 
 - Discover mods loads popular mods as soon as the tab opens (and when the instance or provider changes); Enter searches even while another task runs, and scrolling to the end loads more results.
+- Custom theme: choose your own accent and background colours in Settings → Theme → Custom.
+- The mouse wheel scrolls the page: drop-down lists (like the language) only change after you click them.
+- The launcher no longer turns grey behind an open dialog; it just ignores clicks until the dialog closes.
 - Changing the theme is instant: only the colours are reapplied instead of rebuilding every page.
 - Mods show their own icons in the mods window, for every loader (Fabric, Quilt, Forge, NeoForge, old mcmod.info); mods without one get their Modrinth icon.
 - Skins shows the skin you wear: the Microsoft account's current skin, or for profiles without premium the default skin Minecraft gives them.

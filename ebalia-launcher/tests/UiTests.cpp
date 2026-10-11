@@ -350,6 +350,10 @@ printf started > launched-marker
             if(t.id!="ebalia"){QVERIFY2(!sheet.contains("#3c8527")&&!sheet.contains("#4a9e31"),qPrintable(t.id));QCOMPARE(Ui::themed(QColor("#ed6957")),QColor("#ed6957"));QCOMPARE(Ui::themed(Qt::white),QColor(Qt::white));}
             if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){qApp->setStyleSheet(sheet);MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Settings);QTest::qWait(150);window.grab().save(out+"/theme-"+t.id+".png");}
         }
+        // Custom colours: a blue accent and a dark red background.
+        Ui::setCustomTheme(QColor(40,120,255),QColor(40,10,12));QCOMPARE(Ui::theme(),QString("custom"));
+        {auto accent=Ui::themed(QColor("#3c8527"));QVERIFY2(qAbs(accent.hslHue()-215)<8,qPrintable(accent.name()));auto back=Ui::themed(QColor("#141416"));QVERIFY2(back.hslHue()>350||back.hslHue()<8,qPrintable(back.name()));QCOMPARE(Ui::themed(Qt::white),QColor(Qt::white));}
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){qApp->setStyleSheet(Ui::styleSheet());MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Settings);QTest::qWait(150);window.grab().save(out+"/theme-custom.png");}
         Ui::setTheme("unknown");QCOMPARE(Ui::theme(),QString("ebalia"));
     }
     void serverListEditing(){
@@ -391,6 +395,25 @@ printf started > launched-marker
         window.showPage(MainWindow::Skins);QTest::qWait(300);
         auto list=window.findChild<QListWidget*>("skinList");QVERIFY(list->count()>=1);QVERIFY(list->item(0)->text().startsWith("Steve · "));
         if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/skins-offline.png");
+    }
+    void wheelDoesNotChangeLists(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Settings);QTest::qWait(100);
+        auto language=window.findChild<QComboBox*>("languageChoice");QVERIFY(language);const int before=language->currentIndex();
+        auto wheel=[&](QWidget *w){QWheelEvent e(QPointF(10,10),w->mapToGlobal(QPointF(10,10)),QPoint(),QPoint(0,-120),Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);QApplication::sendEvent(w,&e);};
+        window.setFocus();wheel(language);QCOMPARE(language->currentIndex(),before);
+        language->setFocus();QTest::qWait(20);if(language->hasFocus()){wheel(language);QVERIFY(language->currentIndex()!=before);}
+    }
+    void exploreModIcons(){
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        {McInstanceManager setup(data.path());setup.createInstance("Mods","1.20.1","forge");}
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Explore);
+        auto results=window.findChild<QListWidget*>("modResults");QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);QTest::qWait(8000);
+        int real=0;for(int n=0;n<results->count();++n)if(results->item(n)->icon().availableSizes().value(0).width()>=80)++real;
+        qInfo()<<"items"<<results->count()<<"with icon"<<real;
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/explore-icons.png");
+        QVERIFY(real>results->count()/2);
     }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
@@ -474,11 +497,12 @@ printf started > launched-marker
     }
     void dialogOpenedFromAPageStaysUsable(){
         // Regression: the skin import dialog (a child of a page) opened with Save and Cancel disabled.
-        QMainWindow window;auto central=new QWidget;auto layout=new QVBoxLayout(central);auto page=new QWidget;layout->addWidget(page);window.setCentralWidget(central);window.show();
+        QMainWindow window;auto central=new QWidget;auto layout=new QVBoxLayout(central);auto page=new QWidget;layout->addWidget(page);auto behind=new QPushButton("behind");layout->addWidget(behind);window.setCentralWidget(central);window.show();
         QDialog dialog(page);auto form=new QFormLayout(&dialog);auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);
         connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
         QTimer::singleShot(200,&dialog,[&]{
-            QVERIFY(dialog.isEnabled());auto save=buttons->button(QDialogButtonBox::Save);QVERIFY(save->isEnabled());QVERIFY(!central->isEnabled());
+            QVERIFY(dialog.isEnabled());auto save=buttons->button(QDialogButtonBox::Save);QVERIFY(save->isEnabled());QVERIFY(central->isEnabled()); // not greyed out
+            bool clicked=false;QObject::connect(behind,&QPushButton::clicked,behind,[&]{clicked=true;});QTest::mouseClick(behind,Qt::LeftButton);QVERIFY(!clicked); // but blocked
             QTest::mouseClick(save,Qt::LeftButton);
         });
         QCOMPARE(Ui::openWindow(dialog),int(QDialog::Accepted));QVERIFY(central->isEnabled());
@@ -543,7 +567,9 @@ printf started > launched-marker
         {McInstanceManager setup(data.path());setup.createInstance("First","0.0-test","vanilla");}
         MainWindow window;window.resize(1200,800);window.show();window.showPage(MainWindow::Instances);QTest::qWait(20);
         auto play=window.findChild<QPushButton*>("cardPlay");QVERIFY(play);QVERIFY(play->text().contains("Play"));
-        bool asked=false;QTimer::singleShot(20,&window,[&]{auto dialog=qobject_cast<QInputDialog*>(QApplication::activeModalWidget());QVERIFY(dialog);QVERIFY(!dialog->textValue().isEmpty());dialog->setTextValue("Tester");asked=true;dialog->accept();});
+        bool asked=false;auto answer=new QTimer(&window);answer->setInterval(20);
+        connect(answer,&QTimer::timeout,&window,[&,answer]{QInputDialog *dialog=nullptr;for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QInputDialog*>(w);d&&d->isVisible())dialog=d;if(!dialog)return;
+            answer->stop();asked=!dialog->textValue().isEmpty();dialog->setTextValue("Tester");dialog->accept();});answer->start();
         QTest::mouseClick(play,Qt::LeftButton);QVERIFY(asked);
         auto accounts=window.findChild<AccountManager*>();QVERIFY(accounts);QCOMPARE(accounts->active().name,QString("Tester"));
         auto manager=window.findChild<McInstanceManager*>();QVERIFY(manager->isInstalling(manager->instances().first().dir));
@@ -566,7 +592,7 @@ printf started > launched-marker
             QTimer::singleShot(30,&window,[&]{
                 QDialog *dialog=nullptr;for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w);d&&d->isVisible()&&d->objectName()=="createInstanceDialog")dialog=d;QVERIFY(dialog);
                 // A separate window: not modal (GNOME would glue it to the launcher) and the launcher behind it is disabled.
-                QCOMPARE(dialog->windowModality(),Qt::NonModal);QVERIFY(!window.centralWidget()->isEnabled());QVERIFY(dialog->isSizeGripEnabled());
+                QCOMPARE(dialog->windowModality(),Qt::NonModal);QVERIFY(window.centralWidget()->isEnabled());QVERIFY(dialog->isSizeGripEnabled());
                 auto edits=dialog->findChildren<QLineEdit*>();QVERIFY(!edits.isEmpty());edits.first()->setText("Same instance");auto boxes=dialog->findChildren<QDialogButtonBox*>();QVERIFY(!boxes.isEmpty());handled=true;QTest::mouseClick(boxes.first()->button(QDialogButtonBox::Ok),Qt::LeftButton);});
             auto create=window.findChild<QPushButton*>(n?"newInstance":"homePlay");QVERIFY(create);QVERIFY(create->isVisible());QTest::mouseClick(create,Qt::LeftButton);QVERIFY(handled);QVERIFY(window.centralWidget()->isEnabled());
         }

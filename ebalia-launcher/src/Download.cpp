@@ -2,7 +2,7 @@
 #include <QtNetwork>
 #include <QSaveFile>
 #include <stdexcept>
-void Download::file(const QUrl &url,const QString &path,const QByteArray &expected,QCryptographicHash::Algorithm algorithm,std::function<void(qint64,qint64)> progress){
+void Download::file(const QUrl &url,const QString &path,const QByteArray &expected,QCryptographicHash::Algorithm algorithm,std::function<void(qint64,qint64)> progress){if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))throw std::runtime_error(("Sin conexión: "+url.host()).toStdString());
     auto fail=[](QString s){throw std::runtime_error(s.toStdString());};
     if(url.scheme()!="https"||url.host().isEmpty()||!url.userInfo().isEmpty())fail("Invalid HTTPS download address");
     if(!expected.isEmpty()){QFile existing(path);if(existing.open(QIODevice::ReadOnly)){QCryptographicHash sum(algorithm);sum.addData(&existing);if(sum.result().toHex()==expected.toLower())return;}}
