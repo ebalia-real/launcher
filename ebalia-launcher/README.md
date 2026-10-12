@@ -1,6 +1,6 @@
 # EBALIA Launcher 1.1.0
 
-[Descargar](https://ebalia-launcher.gitgud.site/#descargas) · [Novedades de 1.1.0](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
+[Descargar](https://ebalia.gitgud.site/#descargas) · [Novedades de 1.1.0](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
 
 Reconstrucción nativa en C++20 / Qt 6. Barra lateral con ilustraciones de colores propias y la cuenta arriba, como el Minecraft Launcher; los controles usan iconos [Lucide](https://lucide.dev) (licencia ISC). **Inicio** tiene fondos que cambian automáticamente, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes completas. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
 

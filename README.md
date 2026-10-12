@@ -5,7 +5,7 @@
 <h1 align="center">EBALIA Launcher</h1>
 <p align="center">Minecraft Java, modpacks, Lost Versions y las creaciones de EBALIA.</p>
 <p align="center">
-  <a href="https://ebalia-launcher.gitgud.site/#descargas">Descargar</a> ·
+  <a href="https://ebalia.gitgud.site/#descargas">Descargar</a> ·
   <a href="https://github.com/ebalia-real/launcher/releases">Versiones</a> ·
   <a href="https://www.patreon.com/EBALIA">Patreon</a> ·
   <a href="https://github.com/ebalia-real/launcher/issues">Reportar un problema</a>
@@ -15,7 +15,7 @@
 
 ## Descargar e instalar
 
-La [página oficial](https://ebalia-launcher.gitgud.site/#descargas) detecta el idioma del navegador, muestra la versión publicada y ofrece las descargas sin salir a una página de GitHub. Consulta las versiones de GitHub y GitGud cada minuto mientras está abierta.
+La [página oficial](https://ebalia.gitgud.site/#descargas) detecta el idioma del navegador, muestra la versión publicada y ofrece las descargas sin salir a una página de GitHub. Consulta las versiones de GitHub y GitGud cada minuto mientras está abierta.
 
 | Sistema | Paquete | Instalación |
 | --- | --- | --- |
