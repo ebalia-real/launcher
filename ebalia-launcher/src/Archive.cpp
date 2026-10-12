@@ -26,7 +26,9 @@ struct Utf8Names {
 #endif
 };
 // Paths given to libarchive: UTF-16 on Windows (the ANSI code page cannot hold every name), the file system encoding elsewhere.
+// An empty name means standard input to libarchive, which would wait for input that never comes: refused.
 int openRead(archive *a, const QString &file) {
+    if (file.isEmpty()) return ARCHIVE_FATAL;
 #ifdef Q_OS_WIN
     return archive_read_open_filename_w(a, reinterpret_cast<const wchar_t *>(QDir::toNativeSeparators(file).utf16()), 65536);
 #else

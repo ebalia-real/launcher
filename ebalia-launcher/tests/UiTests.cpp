@@ -15,6 +15,7 @@
 #include "PatreonNewsPage.hpp"
 #include "Ui.hpp"
 #include "BedrockPage.hpp"
+#include "BedrockInstaller.hpp"
 #include "LauncherUpdater.hpp"
 #include "MsAuth.hpp"
 #include "InstanceIcons.hpp"
@@ -57,54 +58,50 @@ private slots:
     }
     void initTestCase(){QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
 
-    void bedrockCommandValidation() {
-        QTemporaryDir dir;
-        QVERIFY(!Bedrock::localCommand("relative.exe",Bedrock::Platform::Windows).valid());
-        QVERIFY(!Bedrock::localCommand(dir.path()+"/missing.exe",Bedrock::Platform::Windows).valid());
-        const auto exe=dir.path()+"/manager name; literal.exe";
-        QFile file(exe);QVERIFY(file.open(QIODevice::WriteOnly));file.write("test");file.close();
-        auto windows=Bedrock::localCommand(exe,Bedrock::Platform::Windows);
-        QCOMPARE(windows.program,exe);QVERIFY(windows.arguments.isEmpty());
-        QVERIFY(!Bedrock::localCommand(exe,Bedrock::Platform::Unsupported).valid());
-#ifndef Q_OS_WIN
-        QVERIFY(!Bedrock::localCommand(exe,Bedrock::Platform::Linux).valid());
-        QVERIFY(file.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
-        QCOMPARE(Bedrock::localCommand(exe,Bedrock::Platform::Linux).program,exe);
-#endif
-        const auto bundle=dir.path()+"/Bedrock Test.app";QVERIFY(QDir().mkpath(bundle));
-        auto mac=Bedrock::localCommand(bundle,Bedrock::Platform::MacOS);
-        QCOMPARE(mac.program,QString("/usr/bin/open"));QCOMPARE(mac.arguments,QStringList({"-a",bundle}));
-        QVERIFY(!Bedrock::localCommand(bundle,Bedrock::Platform::Linux).valid());
-    }
-    void bedrockMissingProviderNeverEnablesLaunch() {
-        QTemporaryDir dir;
-        QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
-        settings.setValue("provider/path",dir.path()+"/nonexistent");settings.sync();
-        BedrockPage page(dir.path());page.resize(600,650);page.show();
-        auto launch=page.findChild<QPushButton*>("bedrockPlay");QVERIFY(launch);
-        QTest::qWait(50);QVERIFY(!launch->isEnabled());
-        QVERIFY(!page.findChild<QLabel*>("bedrockProviderStatus")->text().isEmpty());
-    }
-    void bedrockLaunchPreservesLiteralPath() {
-#ifndef Q_OS_UNIX
-        QSKIP("Uses a POSIX test helper; Windows argv is covered by command validation.");
+    void bedrockVersionsAndProfile() {
+#ifdef Q_OS_WIN
+        QSKIP("Windows plays Minecraft for Windows from the Store; no Minecraft Linux files.");
 #else
-        QTemporaryDir dir;
-        const auto exe=dir.path()+"/bedrock helper; literal";
-        QFile helper(exe);QVERIFY(helper.open(QIODevice::WriteOnly));
-        helper.write(R"SCRIPT(#!/bin/sh
-printf started > launched-marker
-)SCRIPT");helper.close();
-        QVERIFY(helper.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
-        QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
-        settings.setValue("provider/path",exe);settings.sync();
-        BedrockPage page(dir.path());page.show();
-        auto launch=page.findChild<QPushButton*>("bedrockPlay");
-        QTRY_VERIFY(launch->isEnabled());launch->click();
-        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(dir.path()+"/launched-marker"),3000);
-        auto path=page.findChild<QLineEdit*>("bedrockProviderPath");
-        path->setFocus();QTest::keyClicks(path,"invalid");QVERIFY(!launch->isEnabled());
+        // Minecraft Linux's files: a downloaded version, one without the game library, and the player's profile with
+        // the compatibility module. EBALIA lists the playable version and writes its own profile with that module.
+        QTemporaryDir data;qputenv("EBALIA_BEDROCK_GAMEDATA",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_BEDROCK_GAMEDATA");});
+        QVERIFY(QDir().mkpath(data.path()+"/versions/1.26.51.1/lib/x86_64"));QFile lib(data.path()+"/versions/1.26.51.1/lib/x86_64/libminecraftpe.so");QVERIFY(lib.open(QIODevice::WriteOnly));lib.close();
+        QVERIFY(QDir().mkpath(data.path()+"/versions/broken/lib/x86_64"));
+        {QSettings names(data.path()+"/versions/versions.ini",QSettings::IniFormat);names.setValue("1.26.51.1/versionName","1.26.51.1");}
+        {QSettings profiles(data.path()+"/profiles/profiles.ini",QSettings::IniFormat);profiles.setValue("selected","Mine");
+         profiles.beginGroup("Mine");profiles.setValue("version","googleplay");profiles.beginWriteArray("mods");profiles.setArrayIndex(0);profiles.setValue("path","/mods/mcpelauncher-updates/1.26.45.1/x86_64/");profiles.endArray();profiles.endGroup();}
+        const auto versions=BedrockInstaller::versions();QCOMPARE(versions.size(),1);QCOMPARE(versions.first().dir,QString("1.26.51.1"));QCOMPARE(versions.first().abi,QString("x86_64"));
+        BedrockInstaller::writeProfile("1.26.51.1");
+        QSettings profiles(data.path()+"/profiles/profiles.ini",QSettings::IniFormat);
+        QCOMPARE(profiles.value("EBALIA/version").toString(),QString("dir 1.26.51.1"));QCOMPARE(profiles.value("EBALIA/arch").toString(),QString("x86_64"));
+        profiles.beginGroup("EBALIA");QCOMPARE(profiles.beginReadArray("mods"),1);profiles.setArrayIndex(0);QCOMPARE(profiles.value("path").toString(),QString("/mods/mcpelauncher-updates/1.26.45.1/x86_64/"));profiles.endArray();profiles.endGroup();
+        QCOMPARE(profiles.value("selected").toString(),QString("Mine"));QCOMPARE(profiles.value("Mine/version").toString(),QString("googleplay"));
+        QVERIFY_EXCEPTION_THROWN(BedrockInstaller::writeProfile("broken"),std::runtime_error);
+        // What the end of a game log means.
+        QCOMPARE(BedrockInstaller::problem("...\nSomething went wrong\n"),QString("licence"));QCOMPARE(BedrockInstaller::problem("Failed to load Minecraft library"),QString("incompatible"));QVERIFY(BedrockInstaller::problem("Bye").isEmpty());
 #endif
+    }
+    void bedrockPageStates() {
+#ifdef Q_OS_WIN
+        QSKIP("Detection on Windows asks the Store packages of this computer.");
+#elif defined(Q_OS_MACOS)
+        if(!BedrockInstaller::unsupportedReason().isEmpty())QSKIP("This Mac cannot run Minecraft Linux.");
+#endif
+        QTemporaryDir data,game;qputenv("EBALIA_BEDROCK_GAMEDATA",game.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_BEDROCK_GAMEDATA");qunsetenv("EBALIA_BEDROCK_RUNTIME");});
+        // Not installed: Install, no Play.
+        qputenv("EBALIA_BEDROCK_RUNTIME","");
+        {BedrockPage page(data.path());page.resize(700,700);page.show();
+         auto launch=page.findChild<QPushButton*>("bedrockPlay");QVERIFY(launch);
+         QTRY_VERIFY(!page.findChild<QLabel*>("bedrockProviderStatus")->text().contains("…"));
+         QVERIFY(!launch->isEnabled());QVERIFY(page.findChild<QPushButton*>("bedrockManager")->isHidden());
+         if(!QStandardPaths::findExecutable("flatpak").isEmpty()||QSysInfo::productType()=="macos")QVERIFY(page.findChild<QPushButton*>("bedrockInstall")->isVisible());}
+        // Installed with two downloaded versions: both listed, Play enabled, no Install.
+        qputenv("EBALIA_BEDROCK_RUNTIME","--user");
+        for(const auto version:{"1.21.100.1","1.26.51.1"}){QVERIFY(QDir().mkpath(game.path()+"/versions/"+version+"/lib/x86_64"));QFile lib(game.path()+"/versions/"+version+"/lib/x86_64/libminecraftpe.so");QVERIFY(lib.open(QIODevice::WriteOnly));}
+        BedrockPage page(data.path());page.resize(700,700);page.show();
+        auto launch=page.findChild<QPushButton*>("bedrockPlay");auto version=page.findChild<QComboBox*>("bedrockVersion");
+        QTRY_VERIFY(launch->isEnabled());QCOMPARE(version->count(),2);QCOMPARE(version->itemData(0).toString(),QString("1.26.51.1"));
+        QVERIFY(version->isVisible());QVERIFY(page.findChild<QPushButton*>("bedrockInstall")->isHidden());QVERIFY(page.findChild<QPushButton*>("bedrockManager")->isVisible());QVERIFY(page.findChild<QPushButton*>("bedrockUninstall")->isVisible());
     }
     void lostUninstallCancelPreservesFiles() {
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());
@@ -635,7 +632,7 @@ printf started > launched-marker
         auto accounts=window.findChild<AccountManager*>();QVERIFY(accounts);QCOMPARE(accounts->active().name,QString("Tester"));
         auto manager=window.findChild<McInstanceManager*>();QVERIFY(manager->isInstalling(manager->instances().first().dir));
         // The unknown version fails; close the error so the test does not wait on it.
-        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto box=qobject_cast<QMessageBox*>(w);box&&box->isVisible())box->accept();});closer->start(50);
+        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w);d&&d->isVisible()){qInfo()<<"closing"<<d->metaObject()->className()<<d->objectName()<<d->windowTitle();d->reject();}});closer->start(50);
         QTRY_VERIFY_WITH_TIMEOUT(!manager->isInstalling(manager->instances().first().dir),60000);
     }
     void copyAndGroupThroughCore(){

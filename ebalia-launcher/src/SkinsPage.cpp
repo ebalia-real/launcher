@@ -84,7 +84,7 @@ void SkinsPage::showDefaultSkin(const QString &name,const QString &uuid){
     for(const auto &v:QDir(m_root+"/mc/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot)){const QFileInfo f(v.filePath()+"/"+v.fileName()+".jar");if(f.exists()&&f.size()>1000000&&(jar.isEmpty()||f.lastModified()>newest)){jar=f.filePath();newest=f.lastModified();}}
     QImage image;
     if(!jar.isEmpty())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/player/"+QString(slim?"slim/":"wide/")+skin+".png",1024*1024),"PNG");}catch(...){}
-    if(image.isNull())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/steve.png",1024*1024),"PNG");}catch(...){} // versions before 1.19.3
+    if(image.isNull()&&!jar.isEmpty())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/steve.png",1024*1024),"PNG");}catch(...){} // versions before 1.19.3
     if(image.isNull())return;
     const auto file=m_root+"/mc/cache/skins/default-"+hex+".png";QDir().mkpath(QFileInfo(file).absolutePath());image.save(file,"PNG");
     const auto title=name+" · "+key("Current skin")+" ("+QString(skin).replace(0,1,skin.left(1).toUpper())+")";

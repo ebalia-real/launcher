@@ -1,19 +1,29 @@
-# Bedrock integration — experimental in 1.1.0
+# Bedrock · Beta
 
-Windows uses BedrockLauncher with a Minecraft for Windows license / applicable Game Pass subscription. Linux and macOS use an Android backend requiring Google Play ownership. A Windows purchase does not unlock Android downloads. Microsoft/Xbox multiplayer sign-in is separate from downloading the game.
+EBALIA plays the player's own copy of Minecraft Bedrock. It never downloads, unlocks or imports the game itself.
 
-The install button installs the external manager and supported dependencies, then opens that manager for sign-in and game setup. It does not bundle Minecraft or guarantee the latest game release works. Native Windows/macOS game sessions and a real Linux game session have not been validated.
+## Windows
+- Detects Minecraft for Windows (`Microsoft.MinecraftUWP`) and Minecraft Preview (`Microsoft.MinecraftWindowsBeta`) with
+  `Get-AppxPackage`, plus Microsoft Gaming Services, which the game needs to start.
+- Play opens the chosen edition through `minecraft:` / `minecraft-preview:`.
+- Getting the game: the Microsoft Store page (product 9NBLGGH2JHXJ) or the Xbox app (Game Pass). The Store keeps it updated.
+- Uninstall first copies `%APPDATA%\Minecraft Bedrock` (or `Minecraft Bedrock Preview`) and the old package `LocalState`
+  worlds to EBALIA's data folder, then removes the package.
+- Virtual machines without a GPU get a warning: Bedrock uses DirectX.
 
-## Automatic setup added
-The Install Bedrock button runs setup in a worker thread with an inline status bar.
-Linux installs the user Flatpak and dependencies from Flathub. Tested successfully here:
-io.mrarm.mcpelauncher v1.8.4, runtime org.kde.Platform 6.10.
-NixOS still requires system-level Flatpak support; the app explains missing prerequisites rather than editing NixOS configuration.
-Windows downloads the latest upstream stable ZIP and uses winget for .NET Desktop Runtime 8 if needed. Developer Mode may require user action.
-macOS copies the latest upstream DMG's application to the lab's data directory; OS security approval remains in effect.
-Windows/macOS installation paths have NOT been executed on their native OS.
-The full game requires account sign-in in the installed provider; it is not bundled.
-No one-click full-game/no-account compatibility is claimed.
+## Linux and macOS
+The Android edition through Minecraft Linux (https://minecraft-linux.github.io/).
+- Linux: the Flathub app `io.mrarm.mcpelauncher` (user or system installation; every flatpak call names the scope).
+- macOS: the `Minecraft.Bedrock.Launcher.dmg` of the newest stable minecraft-linux/macos-builder release, verified with
+  its sha256 digest and kept in EBALIA's application data. Needs Apple Silicon and macOS 15 or newer.
+- Minecraft Linux's own window signs in to Google Play, checks the purchase, downloads versions and its compatibility
+  module. EBALIA lists the downloaded versions (`versions/`), writes an `EBALIA` profile in `profiles/profiles.ini`
+  (the version plus the mods of the profile the player uses) and starts it with Minecraft Linux's profile mode
+  (`flatpak run … io.mrarm.mcpelauncher -p EBALIA` / `mcpelauncher-ui-qt --profile EBALIA`). That mode keeps the
+  purchase check, so EBALIA never starts the game client directly.
+- Starting newer versions, Minecraft Linux may show its own window asking to approve the Google credentials.
+- Updates: `flatpak remote-ls --updates` / the releases of macos-builder, applied from the page.
+- The game log is written to `bedrock/last-game.log`; the end of it tells a missing purchase, an incompatible version or
+  missing components apart.
 
-Lost Version uninstall and nonmodal operation progress also included. Uninstall moves files to the trash after explicit confirmation and does not remove shared Java/archive caches.
-
+Microsoft / Xbox sign-in happens inside the game (Linux, macOS) or through the Xbox app (Windows).

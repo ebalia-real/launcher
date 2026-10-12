@@ -344,6 +344,10 @@ private slots:
         ModRepository bad(t.path(),[](const QUrl &)->QByteArray{throw std::runtime_error("404");});QVERIFY_EXCEPTION_THROWN(bad.capture(dir,"Fail"),std::runtime_error);QCOMPARE(repo.packs().size(),1);
         QVERIFY_EXCEPTION_THROWN(repo.savePack({{"schema",1},{"name","bad"},{"projects",QJsonArray{QJsonObject{{"project_id","../../path"}}}}}),std::runtime_error);
     }
+    void archiveEmptyPath(){
+        // libarchive reads standard input for an empty file name: that must fail at once, never wait.
+        QVERIFY_EXCEPTION_THROWN(Archive::readEntry({},"a.txt",100),std::runtime_error);QVERIFY_EXCEPTION_THROWN(Archive::extract({},QDir::tempPath()+"/ebalia-empty"),std::runtime_error);
+    }
     void archiveTraversal(){
         QTemporaryDir t;zip(t.path()+"/safe.zip","folder/mod.jar");Archive::extract(t.path()+"/safe.zip",t.path()+"/out");QCOMPARE(readFile(t.path()+"/out/folder/mod.jar"),QByteArray("jar"));
         zip(t.path()+"/bad.zip","../escaped.jar");QVERIFY_EXCEPTION_THROWN(Archive::extract(t.path()+"/bad.zip",t.path()+"/out"),std::runtime_error);QVERIFY(!QFile::exists(t.path()+"/escaped.jar"));

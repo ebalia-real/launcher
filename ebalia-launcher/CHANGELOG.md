@@ -1,3 +1,11 @@
+# 1.1.7
+
+- Bedrock on Linux and macOS goes through Minecraft Linux's own profile mode, which checks the Google Play purchase and loads its compatibility module: the version you choose in EBALIA starts like from its Play button. APK import and the direct game start are gone (they skipped the purchase check).
+- Bedrock lists the downloaded versions to choose from, keeps Minecraft Linux updated (Flathub on Linux; the verified Apple Silicon app on macOS 15+) and says why a game closed (purchase not confirmed, incompatible version, missing components).
+- Bedrock on Windows: Minecraft and Minecraft Preview to choose from, a Game Pass (Xbox app) button, a Gaming Services check, a warning in virtual machines without a graphics card, and uninstall that first copies the worlds from where current versions keep them.
+- Help for signing in to Xbox (Remote Connect on Linux and macOS).
+- Creating a profile without premium before any game version was downloaded could freeze the launcher when it had been opened from a terminal (an empty game file path made the archive reader wait for keyboard input).
+
 # 1.1.6
 
 - Discover mods: the mod page reads descriptions like Modrinth does (Markdown with HTML inside, through md4c), so text, tables, headings and pictures all appear; pictures fall into place as they download without the page jumping, and the cover shows the whole picture instead of a zoomed crop.
