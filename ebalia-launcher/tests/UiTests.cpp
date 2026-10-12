@@ -458,6 +458,24 @@ printf started > launched-marker
         auto hero=window.findChild<QWidget*>("hero");QVERIFY(hero);QVERIFY2(hero->height()>=hero->width()*0.25,qPrintable(QString("%1x%2").arg(hero->width()).arg(hero->height())));
         if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/home-full.png");
     }
+    void exploreModPages(){
+        // Pictures of real mod pages (EBALIA_TEST_ARTIFACTS), searched by name: EBALIA_TEST_MODS="Entity Culling,Chat Heads".
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS")||qEnvironmentVariable("EBALIA_TEST_MODS").isEmpty())QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        {McInstanceManager setup(data.path());setup.createInstance("Mods","1.21.1","fabric");}
+        MainWindow window;window.resize(1400,900);window.show();window.showPage(MainWindow::Explore);
+        auto results=window.findChild<QListWidget*>("modResults");auto query=window.findChild<QLineEdit*>("modQuery");QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);
+        int n=0;
+        for(const auto &name:qEnvironmentVariable("EBALIA_TEST_MODS").split(',')) {
+            query->setText(name.trimmed());QTest::keyClick(query,Qt::Key_Return);QTest::qWait(300);
+            QTRY_VERIFY_WITH_TIMEOUT(results->count()>0&&results->item(0)->text().contains(name.trimmed(),Qt::CaseInsensitive),30000);
+            results->setCurrentRow(0);QTest::qWait(9000);
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){
+                auto panel=window.findChild<QWidget*>("modPreview");panel->grab().save(out+QString("/mod-page-%1.png").arg(++n));
+                auto body=window.findChild<QTextBrowser*>("modPreviewBody");for(int part:{1,2}){body->verticalScrollBar()->setValue(body->verticalScrollBar()->maximum()*part/3);QTest::qWait(300);panel->grab().save(out+QString("/mod-page-%1-%2.png").arg(n).arg(part));}
+            }
+        }
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

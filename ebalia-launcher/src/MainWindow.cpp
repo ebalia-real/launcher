@@ -163,41 +163,64 @@ private:
 namespace {
 // The mouse wheel scrolls the page: drop-down lists never take it (scrolling over the language list in Settings
 // never changes the language) and a number box only once it was clicked.
-// The page of a mod: its description with the pictures in it, downloaded once and fitted to the panel width.
+// The page of a mod: its description with the pictures in it. Each picture is downloaded once and put in its place
+// when it arrives (only the layout is redone, the text and the scroll position stay), fitted to the panel width.
 class ModPageView:public QTextBrowser {
 public:
     std::function<void(const QString &,std::function<void(const QPixmap &)>)> fetch;
     explicit ModPageView(QWidget *parent=nullptr):QTextBrowser(parent) {
-        m_render.setSingleShot(true);m_render.setInterval(120);QObject::connect(&m_render,&QTimer::timeout,this,[this]{render();});
+        m_layout.setSingleShot(true);m_layout.setInterval(80);
+        QObject::connect(&m_layout,&QTimer::timeout,this,[this]{document()->markContentsDirty(0,document()->characterCount());viewport()->update();});
     }
-    void showPage(const QString &body,bool html) {m_body=body;m_html=html;m_pending.clear();++m_generation;verticalScrollBar()->setValue(0);render();}
+    void showPage(const QString &html) {++m_generation;m_shown.clear();document()->clear();setHtml(html);verticalScrollBar()->setValue(0);}
 protected:
     QVariant loadResource(int type,const QUrl &name) override {
         if(type!=QTextDocument::ImageResource||name.scheme()!="https")return QTextBrowser::loadResource(type,name);
         const auto key=name.toString();
-        if(!m_images.contains(key)&&!m_pending.contains(key)&&m_pending.size()<40&&fetch) {
-            m_pending.insert(key);QPointer<ModPageView> self(this);const int generation=m_generation;
-            fetch(key,[self,key,generation](const QPixmap &image){if(!self)return;self->m_images.insert(key,image);if(generation==self->m_generation)self->m_render.start();});
+        if(auto it=m_images.constFind(key);it!=m_images.cend()){m_shown.insert(key);return fitted(*it);}
+        if(!m_pending.contains(key)&&fetch) {
+            m_pending.insert(key);QPointer<ModPageView> self(this);
+            fetch(key,[self,key](const QPixmap &image){if(!self)return;self->m_pending.remove(key);self->m_images.insert(key,image);self->place(key);});
+            if(auto it=m_images.constFind(key);it!=m_images.cend()){m_shown.insert(key);return fitted(*it);}
         }
-        if(auto it=m_images.constFind(key);it!=m_images.cend())return fitted(*it);
-        QPixmap empty(1,1);empty.fill(Qt::transparent);return empty;
+        m_shown.insert(key);QPixmap empty(1,1);empty.fill(Qt::transparent);return empty;
     }
     void resizeEvent(QResizeEvent *event) override {
         QTextBrowser::resizeEvent(event);
-        if(event->oldSize().width()!=event->size().width()&&!m_images.isEmpty())m_render.start();
+        if(event->oldSize().width()!=event->size().width())for(const auto &key:m_shown)if(m_images.contains(key))place(key);
     }
 private:
+    void place(const QString &key) {
+        if(!m_shown.contains(key))return;
+        document()->addResource(QTextDocument::ImageResource,QUrl(key),fitted(m_images.value(key)));m_layout.start();
+    }
     QPixmap fitted(const QPixmap &image) const {
         const int width=qMax(80,viewport()->width()-int(document()->documentMargin()*2)-32);
         return image.width()>width?image.scaledToWidth(width,Qt::SmoothTransformation):image;
     }
-    void render() {
-        const int scroll=verticalScrollBar()->value();
-        document()->clear();if(m_html)setHtml(m_body);else setMarkdown(m_body);
-        verticalScrollBar()->setValue(scroll);
+    int m_generation=0;QSet<QString> m_shown,m_pending;QHash<QString,QPixmap> m_images;QTimer m_layout;
+};
+// The picture above a mod's page: the whole picture, centred over a blurred copy of itself that fills the sides.
+class ModCover:public QWidget {
+public:
+    using QWidget::QWidget;
+    void setImage(const QPixmap &image) {
+        m_image=image;m_blur={};
+        if(!image.isNull()){m_blur=image.scaled(qMax(1,image.width()/24),qMax(1,image.height()/24),Qt::IgnoreAspectRatio,Qt::SmoothTransformation);}
+        setVisible(!image.isNull());update();
     }
-    QString m_body;bool m_html=false;int m_generation=0;
-    QHash<QString,QPixmap> m_images;QSet<QString> m_pending;QTimer m_render;
+protected:
+    void paintEvent(QPaintEvent *) override {
+        if(m_image.isNull())return;
+        QPainter p(this);p.setRenderHint(QPainter::SmoothPixmapTransform);p.setRenderHint(QPainter::Antialiasing);
+        QPainterPath clip;clip.addRoundedRect(QRectF(rect()).adjusted(0,0,0,12),12,12);p.setClipPath(clip);
+        p.drawPixmap(rect(),Ui::cover(m_blur.scaled(size(),Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation),size()));
+        p.fillRect(rect(),QColor(10,10,12,150));
+        const auto shown=m_image.scaled(size(),Qt::KeepAspectRatio,Qt::SmoothTransformation);
+        p.drawPixmap(QPoint((width()-shown.width())/2,(height()-shown.height())/2),shown);
+    }
+private:
+    QPixmap m_image,m_blur;
 };
 class WheelGuard:public QObject {
 public:
@@ -401,10 +424,10 @@ QWidget *MainWindow::buildExplore() {
     auto split=new QSplitter(Qt::Horizontal);split->setObjectName("modSplit");split->setChildrenCollapsible(false);split->addWidget(m_results);l->addWidget(split,1);
     auto panel=new QFrame;panel->setObjectName("modPreview");panel->setStyleSheet("#modPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#modPreview QLabel{background:transparent;}");panel->setMinimumWidth(320);split->addWidget(panel);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
     auto pl=new QVBoxLayout(panel);pl->setContentsMargins(0,0,0,12);pl->setSpacing(10);
-    auto cover=new QLabel;cover->setObjectName("modPreviewCover");cover->setFixedHeight(140);cover->setAlignment(Qt::AlignCenter);cover->setStyleSheet("background:#141416;border-top-left-radius:12px;border-top-right-radius:12px;");pl->addWidget(cover);
+    auto cover=new ModCover;cover->setObjectName("modPreviewCover");cover->setFixedHeight(160);cover->hide();pl->addWidget(cover);
     auto head=new QHBoxLayout;head->setContentsMargins(16,0,16,0);head->setSpacing(12);pl->addLayout(head);auto logo=new QLabel;logo->setFixedSize(56,56);head->addWidget(logo,0,Qt::AlignTop);
     auto names=new QVBoxLayout;names->setSpacing(2);head->addLayout(names,1);auto title=label({},names,"sectionTitle");auto meta=label({},names,"muted");
-    auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done));};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
+    auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1400);};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
     auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");
     auto page=button(text("Abrir página","Open page","Abrir página"),actions,{},this,false,"external-link");actions->addStretch();
@@ -412,21 +435,21 @@ QWidget *MainWindow::buildExplore() {
     connect(page,&QPushButton::clicked,this,[page]{const QUrl url(page->property("url").toString());if(url.scheme()=="https")QDesktopServices::openUrl(url);});
     connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page](QListWidgetItem *item){
         // The panel never hides, so the list keeps its width and a double-click stays on the same mod.
-        if(!item){title->setText(text("Elegí un mod para ver su página.","Choose a mod to see its page.","Escolha um mod para ver a página dele."));meta->clear();logo->clear();cover->hide();bodyView->showPage({},true);return;}
+        if(!item){title->setText(text("Elegí un mod para ver su página.","Choose a mod to see its page.","Escolha um mod para ver a página dele."));meta->clear();logo->clear();cover->setImage({});bodyView->showPage({});return;}
         const auto p=item->data(Qt::UserRole).toJsonObject();const auto id=p["project_id"].toString();
         title->setText(p["title"].toString());const auto downloads=p["downloads"].toInteger();
         meta->setText(p["author"].toString()+(downloads>0?"  ·  "+QLocale(Language::current).toString(downloads)+" "+text("descargas","downloads","downloads"):QString()));
-        logo->setPixmap(item->icon().pixmap(56,56));cover->setPixmap({});cover->setText({});cover->hide();bodyView->showPage(p["description"].toString().toHtmlEscaped(),true);
+        logo->setPixmap(item->icon().pixmap(56,56));cover->setImage({});bodyView->showPage("<p>"+p["description"].toString().toHtmlEscaped()+"</p>");
         page->setProperty("url",p["provider"].toString()=="curseforge"?p["website"].toString():"https://modrinth.com/mod/"+p["slug"].toString());
         const auto gallery=p["gallery"].toArray();const auto art=!gallery.isEmpty()?gallery.first().toString():p["featured_gallery"].toString();
-        if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id){cover->show();cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),140)));}});
+        if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
         // The full description, fetched quietly.
         auto watcher=new QFutureWatcher<QJsonObject>(bodyView);auto root=m_root;
         connect(watcher,&QFutureWatcher<QJsonObject>::finished,bodyView,[this,watcher,bodyView,cover,page,id]{
             const auto d=watcher->result();watcher->deleteLater();auto current=m_results->currentItem();if(!current||current->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id||d.isEmpty())return;
-            const auto body=d["body"].toString();if(!body.isEmpty())bodyView->showPage(body,d["format"]=="html");
+            const auto body=d["body"].toString();if(!body.isEmpty())bodyView->showPage(body);
             if(!d["url"].toString().isEmpty())page->setProperty("url",d["url"].toString());
-            const auto gallery=d["gallery"].toArray();if(cover->pixmap().isNull()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id){cover->show();cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),140)));}});
+            const auto gallery=d["gallery"].toArray();if(cover->isHidden()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
         });
         watcher->setFuture(QtConcurrent::run([root,id]{try{return ModRepository(root).details(id);}catch(...){return QJsonObject{};}}));
     });
@@ -1243,13 +1266,14 @@ void MainWindow::account(bool microsoft){
     connect(&auth,&MsAuth::statusUpdate,&d,[status](const QString &s){status->setText(Language::message(s));});
     connect(&auth,&MsAuth::profilePicture,&d,[this](const QString &uuid,const QImage &picture){m_accounts->setPicture(uuid,picture);});connect(&auth,&MsAuth::loginFailed,&d,[this,&d](const QString &e){d.reject();error(e);});connect(&auth,&MsAuth::loginDone,&d,[this,&d](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});d.accept();});QTimer::singleShot(0,&auth,&MsAuth::startLogin);Ui::openWindow(d);auth.cancel();
 }
-void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done){
-    if(!url.startsWith("https://"))return;if(auto it=m_imageCache.constFind(url);it!=m_imageCache.cend()){done(*it);return;}
+void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth){
+    const auto key=url+"@"+QString::number(maxWidth);
+    if(!url.startsWith("https://"))return;if(auto it=m_imageCache.constFind(key);it!=m_imageCache.cend()){done(*it);return;}
     if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;
     if(!m_images){m_images=new QNetworkAccessManager(this);m_images->setTransferTimeout(20000);auto cache=new QNetworkDiskCache(m_images);cache->setCacheDirectory(m_root+"/cache/images");cache->setMaximumCacheSize(80*1024*1024);m_images->setCache(cache);}
     QNetworkRequest request{QUrl(url)};request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/4.0");request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::NoLessSafeRedirectPolicy);request.setAttribute(QNetworkRequest::CacheLoadControlAttribute,QNetworkRequest::PreferCache);
     auto reply=m_images->get(request);
-    connect(reply,&QNetworkReply::finished,this,[this,reply,url,done]{reply->deleteLater();QPixmap pixmap;if(reply->error()==QNetworkReply::NoError)pixmap.loadFromData(reply->readAll());if(pixmap.isNull())return;if(pixmap.width()>640)pixmap=pixmap.scaledToWidth(640,Qt::SmoothTransformation);m_imageCache.insert(url,pixmap);done(pixmap);});
+    connect(reply,&QNetworkReply::finished,this,[this,reply,key,done,maxWidth]{reply->deleteLater();QPixmap pixmap;if(reply->error()==QNetworkReply::NoError)pixmap.loadFromData(reply->readAll());if(pixmap.isNull())return;if(pixmap.width()>maxWidth)pixmap=pixmap.scaledToWidth(maxWidth,Qt::SmoothTransformation);m_imageCache.insert(key,pixmap);done(pixmap);});
 }
 void MainWindow::refreshNews(bool network){
     auto render=[this](QJsonObject o){

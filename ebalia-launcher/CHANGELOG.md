@@ -1,6 +1,6 @@
 # 1.1.6
 
-- Discover mods: the mod page shows the pictures of its description, fitted to the panel; the cover hides when a mod has none and the logo appears once it downloads.
+- Discover mods: the mod page reads descriptions like Modrinth does (Markdown with HTML inside, through md4c), so text, tables, headings and pictures all appear; pictures fall into place as they download without the page jumping, and the cover shows the whole picture instead of a zoomed crop.
 - Double-click installs even while the list is still loading (it starts as soon as that ends); the page panel is always visible, so the list no longer moves under the mouse.
 - Custom theme: a live preview of a piece of the launcher in the chosen colours.
 - Home in full screen: the banner grows with the window instead of shrinking to a strip.

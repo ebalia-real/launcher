@@ -7,6 +7,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include "ModRepository.hpp"
+#include "ModPage.hpp"
 #include "McInstanceManager.hpp"
 #include "Archive.hpp"
 #include "Language.hpp"
@@ -364,6 +365,15 @@ private slots:
         Language::current="de";QVERIFY(Language::message("Bibliotecas 1/2").endsWith("1/2"));QVERIFY(!Language::message("Bibliotecas 1/2").startsWith("Bibliotecas"));
         QCOMPARE(Language::message("Some remote error text"),QString("Some remote error text"));
         Language::current=previous;
+    }
+    void modPageHtml(){
+        // Markdown with HTML inside, as Modrinth allows: an HTML block glued to text, percent sizes, embedded videos.
+        const auto html=ModPage::html("<img src=\"https://cdn.modrinth.com/a.png\" width=100%> <br>\nThis mod adds heads.\n\n# Title\n\n| A | B |\n|---|---|\n| ![x](https://i.imgur.com/x.png) | **b** |\n\n<iframe src=\"https://www.youtube.com/embed/abc\"></iframe>\n<script>alert(1)</script>",true);
+        QVERIFY(html.contains("This mod adds heads."));QVERIFY(html.contains("<h1>Title</h1>"));QVERIFY(html.contains("<table>"));QVERIFY(html.contains("<strong>b</strong>"));
+        QVERIFY(html.contains("https://cdn.modrinth.com/a.png"));QVERIFY(!html.contains("100%"));QVERIFY(html.contains("https://i.imgur.com/x.png"));
+        QVERIFY(!html.contains("<iframe"));QVERIFY(html.contains("href=\"https://www.youtube.com/embed/abc\""));QVERIFY(!html.contains("alert(1)"));
+        // A small explicit width stays (icons), a huge one goes.
+        QVERIFY(ModPage::html("<img src=\"https://a/b.png\" width=\"150\">",false).contains("width=\"150\""));QVERIFY(!ModPage::html("<img src=\"https://a/b.png\" width=\"1200\" height=\"300\">",false).contains("1200"));
     }
     void curseForgeAdapter(){
         QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("CF","1.20.1","fabric");

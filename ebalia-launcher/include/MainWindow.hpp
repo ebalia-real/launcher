@@ -65,7 +65,8 @@ private:
     void refreshAccounts();
     void refreshLost();
     void refreshNews(bool network=true);
-    void loadImage(const QString &url,std::function<void(const QPixmap &)> done);
+    // Downloads a picture once (disk and memory cache) and makes it at most maxWidth pixels wide.
+    void loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth=640);
     void accountMenu();
     void instancePickerMenu();
     void selection();

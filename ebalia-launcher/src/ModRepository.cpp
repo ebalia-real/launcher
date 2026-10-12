@@ -1,6 +1,7 @@
 #include "ModRepository.hpp"
 #include "BuildConfig.hpp"
 #include "Language.hpp"
+#include "ModPage.hpp"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -114,13 +115,13 @@ QJsonObject ModRepository::details(const QString &projectId) {
         const auto id = projectId.mid(3);
         const auto mod = curse("mods/" + id, {}).object()["data"].toObject();
         QJsonArray gallery; for (const auto &shot : mod["screenshots"].toArray()) gallery.append(shot.toObject()["url"]);
-        return {{"body", curse("mods/" + id + "/description", {}).object()["data"].toString()}, {"format", "html"}, {"gallery", gallery},
+        return {{"body", ModPage::html(curse("mods/" + id + "/description", {}).object()["data"].toString(), false)}, {"format", "html"}, {"gallery", gallery},
                 {"downloads", mod["downloadCount"]}, {"url", mod["links"].toObject()["websiteUrl"]}};
     }
     if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(projectId).hasMatch()) fail("Invalid project.");
     const auto project = api("project/" + projectId).object();
     QJsonArray gallery; for (const auto &g : project["gallery"].toArray()) gallery.append(g.toObject()["url"]);
-    return {{"body", project["body"]}, {"format", "markdown"}, {"gallery", gallery}, {"downloads", project["downloads"]},
+    return {{"body", ModPage::html(project["body"].toString(), true)}, {"format", "html"}, {"gallery", gallery}, {"downloads", project["downloads"]},
             {"url", "https://modrinth.com/mod/" + project["slug"].toString()}};
 }
 QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString,QString>> &items) {

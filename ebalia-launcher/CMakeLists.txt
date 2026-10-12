@@ -1,14 +1,18 @@
 cmake_minimum_required(VERSION 3.21)
-project(EBALIA_Launcher VERSION 1.1.5 LANGUAGES CXX)
+project(EBALIA_Launcher VERSION 1.1.5 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network Concurrent)
 find_package(LibArchive REQUIRED)
+# md4c (MIT): turns the Markdown descriptions of mods into HTML.
+add_library(md4c-html STATIC third_party/md4c/md4c.c third_party/md4c/md4c-html.c third_party/md4c/entity.c)
+target_include_directories(md4c-html PUBLIC third_party/md4c)
+set_target_properties(md4c-html PROPERTIES C_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
 add_library(ebalia-core STATIC
   src/JavaDownloader.cpp src/LostInstaller.cpp src/PackService.cpp src/Download.cpp src/JavaRuntime.cpp src/SkinManager.cpp src/ModRepository.cpp src/Loaders.cpp src/McInstanceManager.cpp src/Archive.cpp src/JavaRunner.cpp
-  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp
+  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp src/ModPage.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
 # Configure the key for this build without putting it in the source code.
@@ -19,7 +23,7 @@ if(EBALIA_CURSEFORGE_API_KEY STREQUAL "" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}
 endif()
 configure_file(src/BuildConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.hpp" @ONLY)
 target_include_directories(ebalia-core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(ebalia-core PUBLIC Qt6::Widgets Qt6::Network Qt6::Concurrent LibArchive::LibArchive)
+target_link_libraries(ebalia-core PUBLIC Qt6::Widgets Qt6::Network Qt6::Concurrent LibArchive::LibArchive PRIVATE md4c-html)
 set(EBALIA_PATREON_SERVICE_URL "" CACHE STRING "Public HTTPS URL of the EBALIA Patreon service")
 if(EBALIA_PATREON_SERVICE_URL STREQUAL "" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/patreon-service-url.txt")
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/patreon-service-url.txt" EBALIA_PATREON_SERVICE_URL)
