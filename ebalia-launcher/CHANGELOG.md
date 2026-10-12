@@ -1,3 +1,10 @@
+# 1.1.6
+
+- Discover mods: the mod page shows the pictures of its description, fitted to the panel; the cover hides when a mod has none and the logo appears once it downloads.
+- Double-click installs even while the list is still loading (it starts as soon as that ends); the page panel is always visible, so the list no longer moves under the mouse.
+- Custom theme: a live preview of a piece of the launcher in the chosen colours.
+- Home in full screen: the banner grows with the window instead of shrinking to a strip.
+
 # 1.1.5
 
 - Bedrock without another launcher: on Windows EBALIA detects Minecraft for Windows and starts it directly (or opens its Microsoft Store page); on Linux it installs the Minecraft Linux runtime, imports the Minecraft APK you bought and starts the game itself. New Uninstall button (Windows worlds are copied first; on Linux worlds stay unless you choose to delete them).

@@ -964,5 +964,8 @@
   "Could not open the game. Press Check again or reinstall it.": "No se pudo abrir el juego. Pulsá Comprobar de nuevo o reinstalalo.",
   "Install Bedrock first.": "Primero instalá Bedrock.",
   "No Minecraft APK was found in the chosen files.": "No se encontró un APK de Minecraft en los archivos elegidos.",
-  "These files are not Minecraft Bedrock for Android (libminecraftpe.so is missing). Choose the Minecraft APK, including its x86_64 or arm64 part.": "Estos archivos no son Minecraft Bedrock para Android (falta libminecraftpe.so). Elegí el APK de Minecraft, incluida su parte x86_64 o arm64."
+  "These files are not Minecraft Bedrock for Android (libminecraftpe.so is missing). Choose the Minecraft APK, including its x86_64 or arm64 part.": "Estos archivos no son Minecraft Bedrock para Android (falta libminecraftpe.so). Elegí el APK de Minecraft, incluida su parte x86_64 o arm64.",
+  "My instance": "Mi instancia",
+  "%1 will install when the current task ends.": "%1 se instalará al terminar la tarea actual.",
+  "Choose a mod to see its page.": "Elegí un mod para ver su página."
 }

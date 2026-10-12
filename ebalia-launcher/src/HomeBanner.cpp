@@ -79,6 +79,9 @@ void HomeBanner::paintEvent(QPaintEvent *){
     QLinearGradient top(0,0,0,100);top.setColorAt(0,QColor(10,12,20,90));top.setColorAt(1,Qt::transparent);p.fillRect(rect(),top);
     QLinearGradient bottom(0,height()*0.45,0,height());bottom.setColorAt(0,Qt::transparent);bottom.setColorAt(1,QColor(14,16,23,225));p.fillRect(rect(),bottom);
 }
-void HomeBanner::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);cacheImages();m_title->setStyleSheet(width()<800?"font-size:22px;":"font-size:30px;");}
+void HomeBanner::resizeEvent(QResizeEvent *event){
+    // Large windows give the covers below more height; the banner grows with the width so it is never squeezed to a strip.
+    if(const int height=qBound(200,int(width()*0.27),440);minimumHeight()!=height)setMinimumHeight(height);
+    QWidget::resizeEvent(event);cacheImages();m_title->setStyleSheet(width()<800?"font-size:22px;":"font-size:30px;");}
 void HomeBanner::showEvent(QShowEvent *event){QWidget::showEvent(event);updateRotation();}
 void HomeBanner::hideEvent(QHideEvent *event){m_rotation.stop();m_fade.stop();m_opacity=1;m_previous={};m_previousScaled={};QWidget::hideEvent(event);}

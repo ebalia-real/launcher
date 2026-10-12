@@ -964,5 +964,8 @@
   "Could not open the game. Press Check again or reinstall it.": "无法打开游戏。请点击“重新检查”或重新安装。",
   "Install Bedrock first.": "请先安装基岩版。",
   "No Minecraft APK was found in the chosen files.": "所选文件中未找到 Minecraft APK。",
-  "These files are not Minecraft Bedrock for Android (libminecraftpe.so is missing). Choose the Minecraft APK, including its x86_64 or arm64 part.": "这些文件不是 Android 版 Minecraft Bedrock（缺少 libminecraftpe.so）。请选择 Minecraft APK，包括其 x86_64 或 arm64 部分。"
+  "These files are not Minecraft Bedrock for Android (libminecraftpe.so is missing). Choose the Minecraft APK, including its x86_64 or arm64 part.": "这些文件不是 Android 版 Minecraft Bedrock（缺少 libminecraftpe.so）。请选择 Minecraft APK，包括其 x86_64 或 arm64 部分。",
+  "My instance": "我的实例",
+  "%1 will install when the current task ends.": "当前任务结束后将安装 %1。",
+  "Choose a mod to see its page.": "选择一个模组以查看其页面。"
 }

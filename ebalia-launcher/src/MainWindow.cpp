@@ -163,6 +163,42 @@ private:
 namespace {
 // The mouse wheel scrolls the page: drop-down lists never take it (scrolling over the language list in Settings
 // never changes the language) and a number box only once it was clicked.
+// The page of a mod: its description with the pictures in it, downloaded once and fitted to the panel width.
+class ModPageView:public QTextBrowser {
+public:
+    std::function<void(const QString &,std::function<void(const QPixmap &)>)> fetch;
+    explicit ModPageView(QWidget *parent=nullptr):QTextBrowser(parent) {
+        m_render.setSingleShot(true);m_render.setInterval(120);QObject::connect(&m_render,&QTimer::timeout,this,[this]{render();});
+    }
+    void showPage(const QString &body,bool html) {m_body=body;m_html=html;m_pending.clear();++m_generation;verticalScrollBar()->setValue(0);render();}
+protected:
+    QVariant loadResource(int type,const QUrl &name) override {
+        if(type!=QTextDocument::ImageResource||name.scheme()!="https")return QTextBrowser::loadResource(type,name);
+        const auto key=name.toString();
+        if(!m_images.contains(key)&&!m_pending.contains(key)&&m_pending.size()<40&&fetch) {
+            m_pending.insert(key);QPointer<ModPageView> self(this);const int generation=m_generation;
+            fetch(key,[self,key,generation](const QPixmap &image){if(!self)return;self->m_images.insert(key,image);if(generation==self->m_generation)self->m_render.start();});
+        }
+        if(auto it=m_images.constFind(key);it!=m_images.cend())return fitted(*it);
+        QPixmap empty(1,1);empty.fill(Qt::transparent);return empty;
+    }
+    void resizeEvent(QResizeEvent *event) override {
+        QTextBrowser::resizeEvent(event);
+        if(event->oldSize().width()!=event->size().width()&&!m_images.isEmpty())m_render.start();
+    }
+private:
+    QPixmap fitted(const QPixmap &image) const {
+        const int width=qMax(80,viewport()->width()-int(document()->documentMargin()*2)-32);
+        return image.width()>width?image.scaledToWidth(width,Qt::SmoothTransformation):image;
+    }
+    void render() {
+        const int scroll=verticalScrollBar()->value();
+        document()->clear();if(m_html)setHtml(m_body);else setMarkdown(m_body);
+        verticalScrollBar()->setValue(scroll);
+    }
+    QString m_body;bool m_html=false;int m_generation=0;
+    QHash<QString,QPixmap> m_images;QSet<QString> m_pending;QTimer m_render;
+};
 class WheelGuard:public QObject {
 public:
     using QObject::QObject;
@@ -360,38 +396,42 @@ QWidget *MainWindow::buildExplore() {
     connect(m_modProvider,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;searchMods();});
     auto search=new QHBoxLayout;search->setSpacing(10);l->addLayout(search);m_query=new QLineEdit;m_query->setObjectName("modQuery");m_query->setPlaceholderText("Sodium, Dynamic Lights, FallingTree, Veinminer…");m_query->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_query->setClearButtonEnabled(true);search->addWidget(m_query,1);
     button(text("Buscar","Search","Buscar"),search,[this]{searchMods();},this,true,"search");connect(m_query,&QLineEdit::returnPressed,this,[this]{searchMods();});
-    m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);
+    m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);m_results->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // Results on the left, the selected mod's page on the right.
     auto split=new QSplitter(Qt::Horizontal);split->setObjectName("modSplit");split->setChildrenCollapsible(false);split->addWidget(m_results);l->addWidget(split,1);
-    auto panel=new QFrame;panel->setObjectName("modPreview");panel->setStyleSheet("#modPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#modPreview QLabel{background:transparent;}");panel->setMinimumWidth(320);panel->hide();split->addWidget(panel);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
+    auto panel=new QFrame;panel->setObjectName("modPreview");panel->setStyleSheet("#modPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#modPreview QLabel{background:transparent;}");panel->setMinimumWidth(320);split->addWidget(panel);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
     auto pl=new QVBoxLayout(panel);pl->setContentsMargins(0,0,0,12);pl->setSpacing(10);
-    auto cover=new QLabel;cover->setObjectName("modPreviewCover");cover->setFixedHeight(170);cover->setAlignment(Qt::AlignCenter);cover->setStyleSheet("background:#141416;border-top-left-radius:12px;border-top-right-radius:12px;");pl->addWidget(cover);
+    auto cover=new QLabel;cover->setObjectName("modPreviewCover");cover->setFixedHeight(140);cover->setAlignment(Qt::AlignCenter);cover->setStyleSheet("background:#141416;border-top-left-radius:12px;border-top-right-radius:12px;");pl->addWidget(cover);
     auto head=new QHBoxLayout;head->setContentsMargins(16,0,16,0);head->setSpacing(12);pl->addLayout(head);auto logo=new QLabel;logo->setFixedSize(56,56);head->addWidget(logo,0,Qt::AlignTop);
     auto names=new QVBoxLayout;names->setSpacing(2);head->addLayout(names,1);auto title=label({},names,"sectionTitle");auto meta=label({},names,"muted");
-    auto bodyView=new QTextBrowser;bodyView->setObjectName("modPreviewBody");bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("img{max-width:100%;} a{color:#6fd15b;}");pl->addWidget(bodyView,1);
+    auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done));};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
     auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");
     auto page=button(text("Abrir página","Open page","Abrir página"),actions,{},this,false,"external-link");actions->addStretch();
     connect(install,&QPushButton::clicked,this,[this]{if(auto item=m_results->currentItem())installModNow(item->data(Qt::UserRole).toJsonObject());});
     connect(page,&QPushButton::clicked,this,[page]{const QUrl url(page->property("url").toString());if(url.scheme()=="https")QDesktopServices::openUrl(url);});
     connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page](QListWidgetItem *item){
-        if(!item){panel->hide();return;}panel->show();const auto p=item->data(Qt::UserRole).toJsonObject();const auto id=p["project_id"].toString();
+        // The panel never hides, so the list keeps its width and a double-click stays on the same mod.
+        if(!item){title->setText(text("Elegí un mod para ver su página.","Choose a mod to see its page.","Escolha um mod para ver a página dele."));meta->clear();logo->clear();cover->hide();bodyView->showPage({},true);return;}
+        const auto p=item->data(Qt::UserRole).toJsonObject();const auto id=p["project_id"].toString();
         title->setText(p["title"].toString());const auto downloads=p["downloads"].toInteger();
         meta->setText(p["author"].toString()+(downloads>0?"  ·  "+QLocale(Language::current).toString(downloads)+" "+text("descargas","downloads","downloads"):QString()));
-        logo->setPixmap(item->icon().pixmap(56,56));cover->setPixmap({});cover->setText({});bodyView->setPlainText(p["description"].toString());
+        logo->setPixmap(item->icon().pixmap(56,56));cover->setPixmap({});cover->setText({});cover->hide();bodyView->showPage(p["description"].toString().toHtmlEscaped(),true);
         page->setProperty("url",p["provider"].toString()=="curseforge"?p["website"].toString():"https://modrinth.com/mod/"+p["slug"].toString());
         const auto gallery=p["gallery"].toArray();const auto art=!gallery.isEmpty()?gallery.first().toString():p["featured_gallery"].toString();
-        if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),170)));});
+        if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id){cover->show();cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),140)));}});
         // The full description, fetched quietly.
         auto watcher=new QFutureWatcher<QJsonObject>(bodyView);auto root=m_root;
         connect(watcher,&QFutureWatcher<QJsonObject>::finished,bodyView,[this,watcher,bodyView,cover,page,id]{
             const auto d=watcher->result();watcher->deleteLater();auto current=m_results->currentItem();if(!current||current->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id||d.isEmpty())return;
-            const auto body=d["body"].toString();if(!body.isEmpty()){if(d["format"]=="html")bodyView->setHtml(body);else bodyView->setMarkdown(body);}
+            const auto body=d["body"].toString();if(!body.isEmpty())bodyView->showPage(body,d["format"]=="html");
             if(!d["url"].toString().isEmpty())page->setProperty("url",d["url"].toString());
-            const auto gallery=d["gallery"].toArray();if(cover->pixmap().isNull()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),170)));});
+            const auto gallery=d["gallery"].toArray();if(cover->pixmap().isNull()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id){cover->show();cover->setPixmap(Ui::cover(image,QSize(qMax(320,cover->width()),140)));}});
         });
         watcher->setFuture(QtConcurrent::run([root,id]{try{return ModRepository(root).details(id);}catch(...){return QJsonObject{};}}));
     });
+    // The logo follows the mod's icon once it has downloaded.
+    connect(m_results->model(),&QAbstractItemModel::dataChanged,logo,[this,logo](const QModelIndex &from,const QModelIndex &to){if(auto c=m_results->currentItem();c&&m_results->row(c)>=from.row()&&m_results->row(c)<=to.row())logo->setPixmap(c->icon().pixmap(56,56));});
     // Double-click installs the mod (with its dependencies) right away.
     connect(m_results,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){installModNow(item->data(Qt::UserRole).toJsonObject());});
     auto browseRow=new Ui::ResponsiveRow(720);l->addWidget(browseRow);auto browse=browseRow->box();browse->setSpacing(10);
@@ -612,8 +652,32 @@ QWidget *MainWindow::buildSettings() {
         auto accentButton=new QPushButton;accentButton->setObjectName("customAccent");swatch(accentButton,accent);auto backgroundButton=new QPushButton;backgroundButton->setObjectName("customBackground");swatch(backgroundButton,background);
         form->addRow(text("Color de acento","Accent colour","Cor de destaque"),accentButton);form->addRow(text("Fondo","Background","Fundo"),backgroundButton);
         auto note=new QLabel(text("El acento colorea botones, selecciones y enlaces. El fondo tiñe las ventanas y tarjetas; elegí un color oscuro para que el texto se lea bien.","The accent colours buttons, selections and links. The background tints windows and cards; choose a dark colour so text stays readable.","O destaque colore botões, seleções e links. O fundo tinge janelas e cartões; escolha uma cor escura para o texto continuar legível."));note->setWordWrap(true);note->setObjectName("muted");form->addRow(note);
-        connect(accentButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(accent,&d,text("Color de acento","Accent colour","Cor de destaque"));if(c.isValid()){accent=c;swatch(accentButton,c);}});
-        connect(backgroundButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(background,&d,text("Fondo","Background","Fundo"));if(c.isValid()){background=c;swatch(backgroundButton,c);}});
+        // A small piece of the launcher drawn with the chosen colours, updated at once.
+        auto preview=new QFrame;preview->setObjectName("content");preview->setProperty("customThemePreview",true);preview->setMinimumWidth(460);
+        auto pv=new QHBoxLayout(preview);pv->setContentsMargins(12,12,12,12);pv->setSpacing(12);
+        auto sampleNav=new QListWidget;sampleNav->setFixedWidth(160);sampleNav->setFocusPolicy(Qt::NoFocus);sampleNav->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);sampleNav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        for(const auto &[icon,name]:QList<std::pair<QString,QString>>{{"house",k("Home")},{"layout-grid",k("Instances")},{"compass",k("Discover mods")}})new QListWidgetItem(Ui::navigationIcon(icon),name,sampleNav);
+        sampleNav->setIconSize(QSize(20,20));
+        sampleNav->setCurrentRow(1);pv->addWidget(sampleNav);
+        auto sampleCard=new QFrame;sampleCard->setObjectName("settingsCard");auto sc=new QVBoxLayout(sampleCard);sc->setContentsMargins(14,12,14,12);sc->setSpacing(8);pv->addWidget(sampleCard,1);
+        auto sampleTitle=new QLabel(k("My instance"));sampleTitle->setObjectName("sectionTitle");sc->addWidget(sampleTitle);
+        auto sampleText=new QLabel("Fabric 1.21.1  ·  12 mods");sampleText->setObjectName("muted");sc->addWidget(sampleText);
+        auto sampleBar=new QProgressBar;sampleBar->setValue(60);sampleBar->setTextVisible(false);sampleBar->setFixedHeight(8);sc->addWidget(sampleBar);
+        auto sampleRow=new QHBoxLayout;sampleRow->setSpacing(8);sc->addLayout(sampleRow);
+        auto samplePlay=new QPushButton(Ui::icon("play"),k("Play"));samplePlay->setProperty("primary",true);sampleRow->addWidget(samplePlay);
+        sampleRow->addWidget(new QPushButton(k("Settings")));sampleRow->addStretch();
+        sc->addStretch();form->insertRow(0,preview);
+        auto restyle=[&,preview]{
+            // The style sheet of these colours, without changing the launcher until Save.
+            QSettings settings;const auto keep=[&](const QString &key){return std::pair{settings.contains(key),settings.value(key)};};
+            const auto theme=keep("ui/theme"),oldAccent=keep("ui/themeAccent"),oldBackground=keep("ui/themeBackground");
+            Ui::setCustomTheme(accent,background);const auto sheet=Ui::styleSheet();
+            for(const auto &[key,value]:QList<std::pair<QString,std::pair<bool,QVariant>>>{{"ui/theme",theme},{"ui/themeAccent",oldAccent},{"ui/themeBackground",oldBackground}}){if(value.first)settings.setValue(key,value.second);else settings.remove(key);}
+            preview->setStyleSheet(sheet+"#content{border-radius:12px;}");
+        };
+        restyle();
+        connect(accentButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(accent,&d,text("Color de acento","Accent colour","Cor de destaque"));if(c.isValid()){accent=c;swatch(accentButton,c);restyle();}});
+        connect(backgroundButton,&QPushButton::clicked,&d,[&]{auto c=QColorDialog::getColor(background,&d,text("Fondo","Background","Fundo"));if(c.isValid()){background=c;swatch(backgroundButton,c);restyle();}});
         auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);connect(buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
         if(Ui::openWindow(d)!=QDialog::Accepted)return;
         Ui::setCustomTheme(accent,background);qApp->setStyleSheet(Ui::styleSheet());
@@ -1148,6 +1212,7 @@ void MainWindow::searchMods(int offset){
             const auto url=p["icon_url"].toString();
             loadImage(url,[list=QPointer<QListWidget>(m_results),url](const QPixmap &icon){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toJsonObject()["icon_url"].toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(icon,QSize(88,88),14)));});
         }
+        if(offset==0&&m_results->count()>0)m_results->setCurrentRow(0);
         if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));};
     if(offset==0){work(Language::key("Searching provider…"),job,show);return;}
     // Further pages load quietly at the end of the list, without a progress bar.
@@ -1158,6 +1223,8 @@ void MainWindow::searchMods(int offset){
 }
 void MainWindow::installModNow(const QJsonObject &project){
     const auto dir=m_target->currentData().toString();if(dir.isEmpty())return;
+    // Another task (such as loading the list) is still running: the install starts right after it.
+    if(m_jobs){m_status->setText(text("%1 se instalará al terminar la tarea actual.","%1 will install when the current task ends.","%1 será instalado ao terminar a tarefa atual.").arg(project["title"].toString()));QTimer::singleShot(400,this,[this,project]{installModNow(project);});return;}
     if(m_mc->isRunning(dir)||m_installing.contains(dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}
     QJsonArray installed;if(QFile::exists(dir+"/mods.json")){try{for(const auto &v:ModRepository::read(dir+"/mods.json")["mods"].toArray())if(QFile::exists(dir+"/mods/"+v.toObject()["filename"].toString()))installed.append(v);}catch(...){}}

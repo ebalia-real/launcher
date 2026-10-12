@@ -416,6 +416,48 @@ printf started > launched-marker
         if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/explore-icons.png");
         QVERIFY(real>results->count()/2);
     }
+    void exploreModPreview(){
+        // The page of a mod shows its pictures; a double-click starts its installation.
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        {McInstanceManager setup(data.path());setup.createInstance("Mods","1.21.1","fabric");}
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Explore);
+        auto results=window.findChild<QListWidget*>("modResults");QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);
+        const auto wanted=qEnvironmentVariable("EBALIA_TEST_MOD","Entity Culling");int row=0;
+        for(int n=0;n<results->count();++n)if(results->item(n)->text().startsWith(wanted)){row=n;break;}
+        results->setCurrentRow(row);auto body=window.findChild<QTextBrowser*>("modPreviewBody");QVERIFY(body);
+        QTest::qWait(10000);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/explore-preview.png");
+        int pictures=0;for(auto block=body->document()->begin();block.isValid();block=block.next())for(auto it=block.begin();!it.atEnd();++it)if(it.fragment().charFormat().isImageFormat())++pictures;
+        qInfo()<<"pictures in description"<<pictures;
+        auto item=results->item(row);int clicks=0;connect(results,&QListWidget::itemDoubleClicked,&window,[&]{++clicks;});
+        results->scrollToItem(item);QTest::qWait(100);const auto point=results->visualItemRect(item).center();
+        QTest::mousePress(results->viewport(),Qt::LeftButton,{},point);QTest::mouseRelease(results->viewport(),Qt::LeftButton,{},point);QTest::mouseDClick(results->viewport(),Qt::LeftButton,{},point);
+        QCOMPARE(clicks,1);
+        QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QWidget*>("backgroundTaskProgress"),5000);
+    }
+    void customThemePreview(){
+        // The custom theme window shows a piece of the launcher in the chosen colours, without applying them until Save.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        const auto before=QSettings().value("ui/theme");
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Settings);QTest::qWait(50);
+        QPushButton *custom=nullptr;for(auto b:window.findChildren<QPushButton*>("themeChoice"))if(b->property("theme")=="custom")custom=b;QVERIFY(custom);
+        bool seen=false;QTimer::singleShot(200,&window,[&]{
+            for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w);d&&d->objectName()=="customThemeWindow"&&d->isVisible()){
+                QFrame *preview=nullptr;for(auto f:d->findChildren<QFrame*>())if(f->property("customThemePreview").toBool())preview=f;
+                seen=preview&&!preview->styleSheet().isEmpty();
+                if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())d->grab().save(out+"/custom-theme.png");
+                d->reject();}
+        });
+        custom->click();QVERIFY(seen);QCOMPARE(QSettings().value("ui/theme"),before);
+    }
+    void homeBannerKeepsItsHeight(){
+        // Full screen: the covers below grow, the banner must not shrink to a strip.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1920,1080);window.show();window.showPage(MainWindow::Home);QTest::qWait(100);
+        auto hero=window.findChild<QWidget*>("hero");QVERIFY(hero);QVERIFY2(hero->height()>=hero->width()*0.25,qPrintable(QString("%1x%2").arg(hero->width()).arg(hero->height())));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/home-full.png");
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());
