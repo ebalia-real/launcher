@@ -14,7 +14,8 @@
   };
   let copied = null;
   const names = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
-  let state = 'checking', selected = null, busy = false, version = '1.1.1', current = null;
+  // The version and date written in the page when it was built, until the release services answer.
+  let state = 'checking', selected = null, busy = false, version = document.querySelector('[data-release-version]')?.textContent || '1.1.7', current = null;
   let assets = new Map();
   const parse = tag => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag || '')?.slice(1).map(Number);
   const compare = (a,b) => { for(let i=0;i<3;i++) if(a[i]!==b[i]) return a[i]-b[i]; return 0; };
@@ -29,6 +30,7 @@
   function render() {
     const { t, number } = window.ebaliaI18n;
     document.querySelectorAll('[data-release-version]').forEach(el => {el.textContent=version;});
+    if(current?.date) document.querySelectorAll('[data-release-date]').forEach(el => {if(el.dataset.date!==current.date){el.dataset.date=current.date;window.dispatchEvent(new Event('ebalia-release'));}});
     status.textContent = t(state, { count: [...assets.values()].reduce((n, list) => n + list.length, 0), version });
     buttons.forEach(button => { button.textContent = t('availability'); });
     close.setAttribute('aria-label', t('close'));
@@ -99,7 +101,7 @@
     }
     return data.filter(r=>parse(r.tag_name)&&!r.draft&&!r.prerelease&&!r.upcoming_release&&(!r.released_at||Date.parse(r.released_at)<=Date.now())).map(r=>({
       version:parse(r.tag_name),tag:r.tag_name,source,
-      url:source==='github'?r.html_url:r._links?.self,
+      url:source==='github'?r.html_url:r._links?.self,date:source==='github'?r.published_at:r.released_at,
       files:source==='github'?r.assets||[]:r.assets?.links||[]
     })).filter(r=>trusted(r.url,source,false));
   }

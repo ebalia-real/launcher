@@ -1,0 +1,185 @@
+{
+ "disturbed": {
+  "name": "DISTURBED (HORROR)",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/disturbed",
+  "cfDownloads": 3212879,
+  "summary": "Adds a black humanoid entity into your game.",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/1449/647/256/256/638940485151077515_animated.gif",
+  "cats": [
+   "MCreator",
+   "Structures",
+   "Mobs"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.19.2",
+   "1.19.4",
+   "1.20.1"
+  ],
+  "released": "2025-11-14",
+  "iconFile": "disturbed.img",
+  "iconBytes": 1756842
+ },
+ "in-your-world": {
+  "name": "In Your World",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/in-your-world",
+  "cfDownloads": 1746255,
+  "summary": "Something in your world....something is wrong...",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/1059/6/256/256/638590186757729232.png",
+  "cats": [
+   "Mobs",
+   "Structures",
+   "World Gen"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.19.2",
+   "1.19.4",
+   "1.20.1"
+  ],
+  "released": "2026-01-08",
+  "mr": "https://modrinth.com/mod/in-your-world",
+  "mrDownloads": 165806,
+  "mrIcon": "https://cdn.modrinth.com/data/RO5lZ748/306ba99993836e8bcb3fe60227fe1a6c86812a03_96.webp",
+  "mrLoaders": [
+   "forge"
+  ],
+  "iconFile": "in-your-world.img",
+  "iconBytes": 29559
+ },
+ "ooo-jar": {
+  "name": "ooo.jar",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar",
+  "cfDownloads": 1410728,
+  "summary": "you are in a Minecraft Arg",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/1105/911/256/256/638655651054127554.png",
+  "cats": [
+   "Mobs",
+   "Structures",
+   "World Gen"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.19.2",
+   "1.19.4",
+   "1.20.1"
+  ],
+  "released": "2026-01-08",
+  "mr": "https://modrinth.com/mod/000.jar",
+  "mrDownloads": 237164,
+  "mrIcon": "https://cdn.modrinth.com/data/6ZPDXDaj/ad23dbb3483b8c1423952fc9af11b1fd1530fa5e_96.webp",
+  "mrLoaders": [
+   "forge"
+  ],
+  "iconFile": "ooo-jar.img",
+  "iconBytes": 18477
+ },
+ "backrooms-no-exit": {
+  "name": "Backrooms: No Exit",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/backrooms-no-exit",
+  "cfDownloads": 39109,
+  "summary": "Adds VHS styled realistic backrooms to your world.",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/2103/408/256/256/639271147002208293.jpg",
+  "cats": [
+   "Horror",
+   "Mobs",
+   "Adventure and RPG"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.20.1"
+  ],
+  "released": "2026-10-12",
+  "iconFile": "backrooms-no-exit.img",
+  "iconBytes": 53218
+ },
+ "twodoors-jar": {
+  "name": ".2doors.jar",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/twodoors-jar",
+  "cfDownloads": 23488,
+  "summary": "adds the 2 doors series from LookOut3D's to your world",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/2053/994/256/256/639253000234998623.jpg",
+  "cats": [
+   "Dimensions",
+   "Horror",
+   "Mobs",
+   "Structures",
+   "Adventure and RPG"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.20.1"
+  ],
+  "released": "2026-10-01",
+  "iconFile": "twodoors-jar.img",
+  "iconBytes": 67660
+ },
+ "the-world-is-alive": {
+  "name": "My World is Alive",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/the-world-is-alive",
+  "cfDownloads": 4111,
+  "summary": "your world is alive and conscious..",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/2078/541/256/256/639262534692043080.jpg",
+  "cats": [
+   "World Gen",
+   "Horror",
+   "Structures",
+   "Mobs",
+   "Adventure and RPG"
+  ],
+  "loaders": [
+   1
+  ],
+  "versions": [
+   "1.20.1"
+  ],
+  "released": "2026-10-03",
+  "iconFile": "the-world-is-alive.img",
+  "iconBytes": 49533
+ },
+ "secret-01-proyect": {
+  "name": "secret-test",
+  "cf": "https://www.curseforge.com/minecraft/mc-mods/secret-01-proyect",
+  "cfDownloads": 1202164,
+  "summary": "...",
+  "icon": "https://media.forgecdn.net/avatars/thumbnails/1633/763/256/256/639046533087280348.png",
+  "cats": [
+   "Dimensions",
+   "Mobs"
+  ],
+  "loaders": [],
+  "versions": [],
+  "released": "2024-05-30",
+  "iconFile": "secret-01-proyect.img",
+  "iconBytes": 150329
+ },
+ "salvation-archives-lobotomy-remake": {
+  "name": "Salvation archives: Lobotomy REMAKE",
+  "summary": "A remake of the mod that adds a lot of different sounds. Screen effects, events, entities, and... the lobotomy itself",
+  "icon": "https://cdn.modrinth.com/data/vp1KbjMu/547a62d001f8c7ffeaeb6b506c620d9b5d3809c7_96.webp",
+  "cats": [
+   "adventure",
+   "cursed",
+   "game-mechanics"
+  ],
+  "released": "2026-02-14",
+  "mr": "https://modrinth.com/mod/salvation-archives-lobotomy-remake",
+  "mrDownloads": 17855,
+  "mrIcon": "https://cdn.modrinth.com/data/vp1KbjMu/547a62d001f8c7ffeaeb6b506c620d9b5d3809c7_96.webp",
+  "mrLoaders": [
+   "forge"
+  ],
+  "iconFile": "salvation-archives-lobotomy-remake.img",
+  "iconBytes": 11586
+ }
+}

@@ -87,6 +87,45 @@
     setTimeout(() => root.classList.remove('rewinding'), 900);
   });
 
+  // The launcher's release date, in the visitor's language; downloads.js announces a newer release.
+  const dates = () => {
+    for (const element of document.querySelectorAll('[data-release-date]')) {
+      const date = new Date(element.dataset.date);
+      element.textContent = isNaN(date) ? '' : new Intl.DateTimeFormat(root.lang || 'en', { dateStyle: 'long' }).format(date);
+    }
+  };
+  window.addEventListener('ebalia-release', dates);
+  window.addEventListener('ebalia-language-change', dates);
+  dates();
+
+  // The big download button: this computer's system, straight to its packages. Phones and tablets see every system.
+  const hero = document.querySelector('#hero-download');
+  const agent = `${navigator.userAgentData?.platform || ''} ${navigator.platform || ''} ${navigator.userAgent}`.toLowerCase();
+  const mobile = /android|iphone|ipad|ipod|mobile/.test(agent) || (navigator.maxTouchPoints > 1 && /mac/.test(agent) && !/windows/.test(agent) && screen.width < 1100);
+  const system = mobile ? '' : /win/.test(agent) ? 'windows' : /mac/.test(agent) ? 'macos' : /linux|x11|cros/.test(agent) ? 'linux' : '';
+  const systemNames = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
+  const label = () => {
+    const { t } = window.ebaliaI18n;
+    hero.textContent = system ? t('downloadFor', { system: systemNames[system] }) : t('viewDownloads');
+  };
+  window.addEventListener('ebalia-language-change', label);
+  label();
+  hero.addEventListener('click', () => {
+    const button = system && document.querySelector(`#descargas [data-platform="${system}"]`);
+    if (button) button.click();
+    else document.querySelector('#descargas').scrollIntoView({ behavior: calm.matches || !effects() ? 'auto' : 'smooth' });
+  });
+
+  // Links to share: each language's address shows its own preview card in Discord, WhatsApp or Telegram.
+  for (const button of document.querySelectorAll('[data-share]')) {
+    button.addEventListener('click', async () => {
+      const label = button.textContent;
+      try { await navigator.clipboard.writeText(button.dataset.share); button.textContent = '✓'; }
+      catch { window.prompt('', button.dataset.share); }
+      setTimeout(() => { button.textContent = label; }, 1400);
+    });
+  }
+
   // Mod filters: every tape, or only those on one store.
   const filters = [...document.querySelectorAll('.filter')];
   const tapes = [...document.querySelectorAll('.tape')];
@@ -94,6 +133,7 @@
     const store = filter.dataset.filter;
     filters.forEach(other => other.setAttribute('aria-pressed', String(other === filter)));
     tapes.forEach(tape => { tape.hidden = store !== 'all' && !tape.dataset.stores.split(' ').includes(store); });
+    document.querySelectorAll('#mods .group').forEach(group => { group.hidden = !group.querySelector('.tape:not([hidden])'); });
     flash();
   }));
 })();
