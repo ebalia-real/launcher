@@ -7,6 +7,7 @@ class AccountManager;
 class McInstanceManager;
 class QLabel;
 class QListWidget;
+class SkinViewer;
 class SkinsPage : public QWidget {
 public:
     using Work=std::function<void(const QString &,std::function<QJsonObject()>,std::function<void(QJsonObject)>)>;
@@ -14,5 +15,5 @@ public:
 private:
     void refresh();void showSkin();void showDefaultSkin(const QString &name,const QString &uuid);void importSkin();void apply(bool local);
     QString m_root;AccountManager *m_accounts;McInstanceManager *m_instances;Work m_work;
-    QListWidget *m_list;QLabel *m_preview,*m_details;QJsonArray m_skins;bool m_back=false;
+    QListWidget *m_list;SkinViewer *m_preview;QLabel *m_details;QJsonArray m_skins;
 };

@@ -3,12 +3,24 @@
 #include "Language.hpp"
 #include "Ui.hpp"
 #include "ServerList.hpp"
+#include "InstanceContent.hpp"
 #include <QtWidgets>
 #include <algorithm>
 namespace {
 QString t(const char *s){return Language::key(QString::fromUtf8(s));}
 constexpr int spacing=16;
 const QColor light(225,225,230);
+// A stat card that opens its window when clicked anywhere, not only on its link.
+class ClickCard:public QFrame {
+public:
+    explicit ClickCard(std::function<void()> clicked):m_clicked(std::move(clicked)){}
+protected:
+    // The press is accepted so the release comes back here instead of going to the page behind.
+    void mousePressEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton)event->accept();else QFrame::mousePressEvent(event);}
+    void mouseReleaseEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton&&rect().contains(event->position().toPoint())&&m_clicked)m_clicked();}
+private:
+    std::function<void()> m_clicked;
+};
 // Landscape art with the instance icon in a dark badge; the HUD at the bottom of some screenshots is cropped away.
 class Banner:public QWidget {
 public:
@@ -159,13 +171,14 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     struct Stat{QString icon,title,action,folder;};
     const QList<Stat> stats{{"puzzle",t("Mods"),t("MANAGE MODS"),"mods"},{"palette",t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{"sparkles",t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{"map",t("Worlds"),t("MANAGE WORLDS"),"saves"}};
     for(int n=0;n<stats.size();++n){
-        auto card=new QFrame;card->setObjectName("statCard");card->setFixedHeight(150);m_cards<<card;auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
+        const auto folder=stats[n].folder;auto open=[this,folder]{if(folder=="mods"){if(mods)mods();}else if(manage)manage(folder);else if(openFolder)openFolder(folder);};
+        auto card=new ClickCard(open);card->setObjectName("statCard");card->setFixedHeight(150);card->setCursor(Qt::PointingHandCursor);m_cards<<card;auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
         auto icon=new QLabel;icon->setObjectName("statIcon");m_cardIcons<<icon;icon->setFixedSize(40,40);icon->setAlignment(Qt::AlignCenter);icon->setPixmap(Ui::pixmap(stats[n].icon,22,Ui::accent()));cl->addWidget(icon);
         auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");cl->addWidget(title);
         auto value=muted({});m_counts<<value;cl->addWidget(value);cl->addStretch();
         auto links=new QHBoxLayout;links->setSpacing(14);cl->addLayout(links);
         auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);links->addWidget(action);
-        const auto folder=stats[n].folder;connect(action,&QPushButton::clicked,this,[this,folder]{if(folder=="mods"){if(mods)mods();}else if(openFolder)openFolder(folder);});
+        connect(action,&QPushButton::clicked,this,open);
         // Resource and shader packs from CurseForge and Modrinth, straight from their card.
         if(folder=="resourcepacks"||folder=="shaderpacks"){
             auto get=new QPushButton(t("DOWNLOAD"));get->setObjectName(folder=="resourcepacks"?"downloadResourcePacks":"downloadShaderPacks");get->setProperty("link",true);get->setCursor(Qt::PointingHandCursor);links->addWidget(get);
@@ -287,7 +300,8 @@ void InstanceDetail::showInstance(const InstanceInfo &i){
     m_play->setProperty("play",!i.running);m_play->setProperty("danger",i.running);m_play->setEnabled(!i.busy);m_play->style()->unpolish(m_play);m_play->style()->polish(m_play);
     const auto dir=i.base.dir;const int enabled=count(dir+"/mods",{"*.jar"},QDir::Files),disabled=count(dir+"/mods",{"*.jar.disabled"},QDir::Files);
     m_counts[0]->setText(t("%1 mods enabled").arg(enabled)+(disabled?" · "+t("%1 disabled").arg(disabled):QString()));
-    const int packs=count(dir+"/resourcepacks",{},QDir::Files|QDir::Dirs),shaders=count(dir+"/shaderpacks",{},QDir::Files|QDir::Dirs),worlds=count(dir+"/saves",{},QDir::Dirs);
+    // The same entries their windows list: Iris's per-pack settings files and the local skin pack do not count.
+    const int packs=int(InstanceContent::list(dir,"resourcepacks").size()),shaders=int(InstanceContent::list(dir,"shaderpacks").size()),worlds=int(InstanceContent::list(dir,"saves").size());
     m_counts[1]->setText(packs?t("%1 resource packs").arg(packs):t("No resource packs yet"));m_counts[2]->setText(shaders?t("%1 shader packs").arg(shaders):t("No shader packs yet"));m_counts[3]->setText(worlds?t("%1 worlds").arg(worlds):t("No worlds yet"));
     m_running=i.running;showScreenshots();showServers();
 }

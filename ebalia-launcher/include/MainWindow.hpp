@@ -35,6 +35,7 @@ public:
     void startTour();
     // Opens the mods window of an instance.
     Q_INVOKABLE void openMods(const QString &dir){m_selectedDir=dir;manageMods();}
+    Q_INVOKABLE void openContent(const QString &dir,const QString &folder){m_selectedDir=dir;manageContent(folder);}
     // Launcher updates: the sidebar shows "Update to <version>" only while one is available.
     enum class LauncherUpdate{Unknown,Checking,Current,Available,Installing,Failed};
     void setLauncherUpdate(LauncherUpdate state,const QString &version={});
@@ -90,6 +91,8 @@ private:
     void editInstance();
     void removeInstance();
     void manageMods();
+    // Resource packs, shader packs or worlds of the selected instance: list, folder, add, remove, turn on or off.
+    void manageContent(const QString &folder);
     void savePack();
     void applyPack();
     void preview(QJsonArray projects,QString dir);

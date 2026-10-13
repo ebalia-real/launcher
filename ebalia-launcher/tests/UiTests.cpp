@@ -22,6 +22,9 @@
 #include "InstanceViews.hpp"
 #include "ServerList.hpp"
 #include "SkinsPage.hpp"
+#include "SkinViewer.hpp"
+#include "TitleBar.hpp"
+#include "InstanceContent.hpp"
 #include <QTcpSocket>
 #include <QUrlQuery>
 class UiTests:public QObject {
@@ -526,6 +529,65 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(results->count()>0&&!window.findChild<QWidget*>("backgroundTaskProgress"),30000);
             qInfo()<<"curseforge resource pack:"<<results->item(0)->text().section('\n',0,0);
         }
+    }
+    void contentWindows(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        // Clicking anywhere on a card of the instance page opens its window (before the main window and its first-run tour).
+        InstanceDetail detail;detail.resize(1280,900);detail.show();InstanceInfo info;info.base=McInstance{"Packs",data.path(),"1.21.1","fabric",true,4096,0,0};detail.showInstance(info);
+        QString opened;detail.manage=[&](const QString &folder){opened=folder;};QFrame *card=nullptr;
+        for(auto c:detail.findChildren<QFrame*>("statCard"))if(auto title=c->findChild<QLabel*>("statTitle");title&&title->text()==Language::key("Shader packs"))card=c;
+        QVERIFY(card);QTest::mouseClick(card,Qt::LeftButton,{},QPoint(card->width()/2,30));QCOMPARE(opened,QString("shaderpacks"));
+        MainWindow window;window.resize(1280,820);window.show();auto manager=window.findChild<McInstanceManager*>();auto dir=manager->createInstance("Packs","1.21.1","fabric");
+        auto write=[](const QString &path,const QByteArray &bytes){QDir().mkpath(QFileInfo(path).absolutePath());QFile f(path);if(f.open(QIODevice::WriteOnly))f.write(bytes);};
+        write(dir+"/resourcepacks/Faithful/pack.mcmeta",R"({"pack":{"pack_format":34,"description":"§eThe classic look, twice as sharp"}})");
+        {QImage icon(16,16,QImage::Format_ARGB32);icon.fill(QColor(80,160,60));icon.save(dir+"/resourcepacks/Faithful/pack.png");}
+        write(dir+"/shaderpacks/Complementary.zip","zip");write(dir+"/saves/Survival/level.dat","x");
+        {QImage icon(64,64,QImage::Format_ARGB32);icon.fill(QColor(90,120,200));icon.save(dir+"/saves/Survival/icon.png");}
+        // Each window opens with its entries; the first button turns the selected one on.
+        auto check=[&](const QString &folder,std::function<void(QDialog*,QListWidget*)> inside){
+            bool seen=false;
+            std::function<void()> poll=[&]{QDialog *d=nullptr;for(auto w:QApplication::topLevelWidgets())if(w->objectName()=="contentWindow"&&w->isVisible())d=qobject_cast<QDialog*>(w);
+                if(!d){QTimer::singleShot(100,&window,poll);return;}
+                QTimer::singleShot(600,d,[&,d]{seen=true;auto list=d->findChild<QListWidget*>("contentList");inside(d,list);
+                    if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())d->grab().save(out+"/content-"+folder+".png");d->reject();});};
+            QTimer::singleShot(100,&window,poll);window.openContent(dir,folder);QVERIFY(seen);};
+        check("resourcepacks",[&](QDialog *d,QListWidget *list){QCOMPARE(list->count(),1);QVERIFY(list->item(0)->text().contains("The classic look"));
+            d->findChild<QPushButton*>("toggleContent")->click();QVERIFY(list->item(0)->data(Qt::UserRole+1).toBool());});
+        QFile options(dir+"/options.txt");QVERIFY(options.open(QIODevice::ReadOnly));QVERIFY(options.readAll().contains("\"file/Faithful\""));
+        check("shaderpacks",[&](QDialog *d,QListWidget *list){QCOMPARE(list->count(),1);d->findChild<QPushButton*>("toggleContent")->click();});
+        QCOMPARE(InstanceContent::shader(dir),QString("Complementary.zip"));
+        check("saves",[&](QDialog *,QListWidget *list){QCOMPARE(list->count(),1);QVERIFY(list->item(0)->text().startsWith("Survival\n"));});
+    }
+    void skinViewer3D(){
+        // A skin whose head shows a different colour on each side; the right side is half back (yellow), half front (green).
+        QImage skin(64,64,QImage::Format_ARGB32);skin.fill(Qt::transparent);
+        auto fill=[&](QRect r,QColor c){for(int y=r.top();y<=r.bottom();++y)for(int x=r.left();x<=r.right();++x)skin.setPixelColor(x,y,c);};
+        fill({8,8,8,8},Qt::red);fill({24,8,8,8},Qt::blue);fill({0,8,4,8},Qt::yellow);fill({4,8,4,8},Qt::green);fill({8,0,8,8},Qt::magenta);
+        SkinViewer viewer;viewer.resize(240,320);viewer.setSkin(skin,false);viewer.show();
+        // 240 × 320: seven pixels per skin pixel, the middle of the head's front at (120, 67).
+        auto at=[&](double yaw,double pitch,QPoint point){viewer.setView(yaw,pitch);return viewer.grab().toImage().pixelColor(point);};
+        QCOMPARE(at(0,0,{120,67}),QColor(Qt::red));QCOMPARE(at(180,0,{120,67}),QColor(Qt::blue));
+        QCOMPARE(at(90,0,{132,67}),QColor(Qt::green));QCOMPARE(at(90,0,{108,67}),QColor(Qt::yellow));
+        QCOMPARE(at(0,60,{120,95}),QColor(Qt::magenta)); // from above: the top of the head
+        // The flat view is still there.
+        viewer.setThreeD(false);QCOMPARE(viewer.grab().toImage().pixelColor(120,56),QColor(Qt::red));
+        viewer.setThreeD(true);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){
+            viewer.setView(-28,12);viewer.grab().save(out+"/skin-3d.png");
+            // A real skin (EBALIA_TEST_SKIN, "slim:" in front for the slim model) from a few sides.
+            if(auto real=qEnvironmentVariable("EBALIA_TEST_SKIN");!real.isEmpty()){const bool slim=real.startsWith("slim:");viewer.setSkin(QImage(slim?real.mid(5):real),slim);viewer.resize(320,420);
+                for(const auto &[yaw,pitch]:{std::pair{-28.0,12.0},std::pair{150.0,12.0},std::pair{70.0,-20.0},std::pair{-20.0,55.0}})
+                    {viewer.setView(yaw,pitch);viewer.grab().save(out+QString("/skin-real-%1-%2.png").arg(int(yaw)).arg(int(pitch)));}}}
+    }
+    void titleBarDoubleClick(){
+        qputenv("EBALIA_TITLE_BAR","custom");auto unset=qScopeGuard([]{qunsetenv("EBALIA_TITLE_BAR");});
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1000,700);window.show();QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto bar=window.findChild<QWidget*>("titleBar");QVERIFY(bar);QVERIFY(window.windowFlags()&Qt::FramelessWindowHint);QVERIFY(window.findChild<QToolButton*>("titleClose"));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/title-bar.png");
+        QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(window.isMaximized());
+        QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(!window.isMaximized());
+        window.findChild<QToolButton*>("titleMaximize")->click();QTRY_VERIFY(window.isMaximized());
     }
     void skinHeads(){
         // Account pictures become skin heads: Microsoft (a public profile) and a profile without premium (default skin

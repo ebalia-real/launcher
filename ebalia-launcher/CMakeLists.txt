@@ -12,7 +12,7 @@ target_include_directories(md4c-html PUBLIC third_party/md4c)
 set_target_properties(md4c-html PROPERTIES C_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
 add_library(ebalia-core STATIC
   src/JavaDownloader.cpp src/LostInstaller.cpp src/PackService.cpp src/Download.cpp src/JavaRuntime.cpp src/SkinManager.cpp src/ModRepository.cpp src/Loaders.cpp src/McInstanceManager.cpp src/Archive.cpp src/JavaRunner.cpp
-  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp src/ModPage.cpp
+  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp src/ModPage.cpp src/InstanceContent.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
 # Configure the key for this build without putting it in the source code.
@@ -42,7 +42,7 @@ if(NOT EBALIA_MS_CLIENT_ID STREQUAL "" AND NOT EBALIA_MS_CLIENT_ID MATCHES "^[A-
   message(FATAL_ERROR "Invalid Microsoft application ID")
 endif()
 configure_file(src/MicrosoftConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/MicrosoftConfig.hpp" @ONLY)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
   include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
@@ -82,7 +82,7 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
       include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   set_target_properties(ebalia-ui-tests PROPERTIES WIN32_EXECUTABLE FALSE)

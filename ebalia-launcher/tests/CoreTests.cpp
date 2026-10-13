@@ -23,6 +23,7 @@
 #include "ModCompat.hpp"
 #include "CrashReport.hpp"
 #include "GpuInfo.hpp"
+#include "InstanceContent.hpp"
 #include <stdexcept>
 #include <clocale>
 #include <functional>
@@ -402,6 +403,55 @@ private slots:
         QStringList curse;ModRepository cf(t.path(),[&](const QUrl &url){curse<<QUrl::fromPercentEncoding(url.toEncoded());return encode(QJsonObject{{"data",QJsonArray{}}});});
         cf.search("","1.21.1","fabric",0,"curseforge","shader");QVERIFY(curse.last().contains("classId=6552"));QVERIFY(!curse.last().contains("modLoaderType"));
         cf.search("","1.21.1","fabric",0,"curseforge","resourcepack");QVERIFY(curse.last().contains("classId=12"));
+    }
+    void instanceContent(){
+        QTemporaryDir instance,source;const auto dir=instance.path(),src=source.path();
+        auto write=[](const QString &path,const QByteArray &data){QDir().mkpath(QFileInfo(path).absolutePath());QFile f(path);QVERIFY(f.open(QIODevice::WriteOnly));f.write(data);};
+        // A resource pack ZIP whose description is a text component with colour codes.
+        write(src+"/pack/pack.mcmeta",R"({"pack":{"pack_format":34,"description":[{"text":"§aFresh "},{"text":"blocks","extra":[{"text":"!"}]}]}})");
+        {QImage icon(16,16,QImage::Format_ARGB32);icon.fill(Qt::red);QVERIFY(icon.save(src+"/pack/pack.png"));}
+        Archive::compress(src+"/pack",src+"/Fresh.zip");
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,InstanceContent::add(dir,"resourcepacks",src+"/pack/pack.png"));
+        QCOMPARE(InstanceContent::add(dir,"resourcepacks",src+"/Fresh.zip"),QString("Fresh.zip"));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,InstanceContent::add(dir,"resourcepacks",src+"/Fresh.zip"));
+        Archive::compress(src+"/pack",src+"/NoPack.zip",{"pack.mcmeta"});QVERIFY_THROWS_EXCEPTION(std::runtime_error,InstanceContent::add(dir,"resourcepacks",src+"/NoPack.zip"));
+        auto packs=InstanceContent::list(dir,"resourcepacks");QCOMPARE(packs.size(),1);QCOMPARE(packs[0].title,QString("Fresh"));QVERIFY(!packs[0].active);
+        const auto described=InstanceContent::describe(dir,"resourcepacks",packs[0]);QCOMPARE(described.description,QString("Fresh blocks!"));QCOMPARE(described.icon.pixelColor(0,0),QColor(Qt::red));
+        // Turning a pack on keeps the rest of options.txt and its Windows line ends, and drops it from the incompatible list.
+        write(dir+"/options.txt","lang:es_es\r\nresourcePacks:[\"vanilla\",\"fabric\"]\r\nincompatibleResourcePacks:[\"file/Fresh.zip\"]\r\n");
+        InstanceContent::setResourcePack(dir,"Fresh.zip",true);
+        {QFile f(dir+"/options.txt");QVERIFY(f.open(QIODevice::ReadOnly));QCOMPARE(f.readAll(),QByteArray("lang:es_es\r\nresourcePacks:[\"vanilla\",\"fabric\",\"file/Fresh.zip\"]\r\nincompatibleResourcePacks:[]\r\n"));}
+        QVERIFY(InstanceContent::list(dir,"resourcepacks")[0].active);
+        InstanceContent::setResourcePack(dir,"Fresh.zip",false);QVERIFY(!InstanceContent::list(dir,"resourcepacks")[0].active);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,InstanceContent::setResourcePack(dir,"../x.zip",true));
+        // A game never started: the list starts from the vanilla pack. The local skin pack belongs to the Skins page.
+        QFile::remove(dir+"/options.txt");InstanceContent::setResourcePack(dir,"Fresh.zip",true);
+        {QFile f(dir+"/options.txt");QVERIFY(f.open(QIODevice::ReadOnly));QCOMPARE(f.readAll(),QByteArray("resourcePacks:[\"vanilla\",\"file/Fresh.zip\"]"));}
+        QFile::copy(src+"/Fresh.zip",dir+"/resourcepacks/ebalia-local-skin.zip");QCOMPARE(InstanceContent::list(dir,"resourcepacks").size(),1);
+        // Shaders: Iris's settings file next to a pack is not a pack; the choice goes to iris.properties, escaped as Java writes it.
+        const QString shader="Bliss=v2 #1.zip";QDir().mkpath(dir+"/shaderpacks");QFile::copy(src+"/Fresh.zip",dir+"/shaderpacks/"+shader);write(dir+"/shaderpacks/"+shader+".txt",{});
+        QCOMPARE(InstanceContent::list(dir,"shaderpacks").size(),1);QCOMPARE(InstanceContent::shader(dir),QString());
+        write(dir+"/config/iris.properties","#This file stores configuration options for Iris\nmaxShadowRenderDistance=32\nenableShaders=false\n");
+        InstanceContent::setShader(dir,shader);QCOMPARE(InstanceContent::shader(dir),shader);
+        {QFile f(dir+"/config/iris.properties");QVERIFY(f.open(QIODevice::ReadOnly));const auto text=f.readAll();
+         QVERIFY(text.startsWith("#This file stores"));QVERIFY(text.contains("\nmaxShadowRenderDistance=32\n"));QVERIFY(text.contains("\nenableShaders=true\n"));QVERIFY(text.contains("\nshaderPack=Bliss\\=v2 \\#1.zip\n"));}
+        QVERIFY(InstanceContent::list(dir,"shaderpacks")[0].active);
+        InstanceContent::setShader(dir,{});QCOMPARE(InstanceContent::shader(dir),QString());InstanceContent::setShader(dir,shader);
+        InstanceContent::remove(dir,"shaderpacks",shader);QCOMPARE(InstanceContent::shader(dir),QString());QVERIFY(InstanceContent::list(dir,"shaderpacks").isEmpty());
+        QCOMPARE(QDir(dir+"/removed-shaderpacks").entryList(QDir::Files).size(),1);
+        // Oculus (Forge) keeps its own settings file.
+        write(dir+"/mods/oculus-mc1.20.1-1.7.0.jar",{});QFile::copy(src+"/Fresh.zip",dir+"/shaderpacks/Other.zip");
+        InstanceContent::setShader(dir,"Other.zip");QVERIFY(QFile::exists(dir+"/config/oculus.properties"));QCOMPARE(InstanceContent::shader(dir),QString("Other.zip"));
+        // Worlds: a ZIP with the world inside a folder, exported again and imported under a free name.
+        write(src+"/worlds/My World/level.dat","x");Archive::compress(src+"/worlds",src+"/world.zip");
+        QCOMPARE(InstanceContent::add(dir,"saves",src+"/world.zip"),QString("My World"));QCOMPARE(InstanceContent::list(dir,"saves").size(),1);
+        InstanceContent::exportWorld(dir,"My World",src+"/out.zip");QCOMPARE(Archive::readEntry(src+"/out.zip","My World/level.dat",10),QByteArray("x"));
+        QCOMPARE(InstanceContent::add(dir,"saves",src+"/out.zip"),QString("My World (2)"));
+        // A world at the top of the ZIP takes the ZIP's name.
+        Archive::compress(src+"/worlds/My World",src+"/Flat.zip");QCOMPARE(InstanceContent::add(dir,"saves",src+"/Flat.zip"),QString("Flat"));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,InstanceContent::add(dir,"saves",src+"/Fresh.zip"));
+        InstanceContent::remove(dir,"saves","My World");QCOMPARE(InstanceContent::list(dir,"saves").size(),2);QCOMPARE(QDir(dir+"/removed-worlds").entryList(QDir::Dirs|QDir::NoDotAndDotDot).size(),1);
+        QVERIFY(QDir(dir).entryList({".import-*"},QDir::Dirs|QDir::Hidden).isEmpty());
     }
     void skinHead(){
         // The face (8,8) with the hat layer (40,8) drawn over it when that layer has transparency.

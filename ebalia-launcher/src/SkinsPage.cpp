@@ -3,6 +3,7 @@
 #include "ModRepository.hpp"
 #include "Archive.hpp"
 #include "SkinManager.hpp"
+#include "SkinViewer.hpp"
 #include "AccountManager.hpp"
 #include "McInstanceManager.hpp"
 #include "MsAuth.hpp"
@@ -13,8 +14,14 @@ using Language::key;
 SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *instances,Work work,QWidget *parent)
     :QWidget(parent),m_root(std::move(root)),m_accounts(accounts),m_instances(instances),m_work(std::move(work)){
     auto outer=new QVBoxLayout(this);outer->setContentsMargins(0,0,0,0);auto row=new Ui::ResponsiveRow(660);outer->addWidget(row);auto layout=row->box();layout->setSpacing(22);
-    auto visual=new QVBoxLayout;layout->addLayout(visual,1);m_preview=new QLabel;m_preview->setAlignment(Qt::AlignCenter);m_preview->setMinimumSize(240,320);m_preview->setObjectName("skinPreview");visual->addWidget(m_preview,1);
-    auto turn=new QPushButton(key("Front / back"));visual->addWidget(turn);connect(turn,&QPushButton::clicked,this,[this]{m_back=!m_back;showSkin();});
+    auto visual=new QVBoxLayout;layout->addLayout(visual,1);m_preview=new SkinViewer;visual->addWidget(m_preview,1);
+    // Under the model: half a turn (or front and back in 2D), and the choice between the 3D model and the flat view.
+    auto viewRow=new QHBoxLayout;viewRow->setSpacing(8);visual->addLayout(viewRow);
+    auto turn=new QPushButton(key("Front / back"));turn->setObjectName("skinTurn");viewRow->addWidget(turn,1);connect(turn,&QPushButton::clicked,this,[this]{m_preview->turnAround();});
+    auto mode=new QPushButton;mode->setObjectName("skinViewMode");viewRow->addWidget(mode,1);
+    auto modeText=[this,mode]{mode->setText(m_preview->threeD()?key("2D view"):key("3D view"));};
+    connect(mode,&QPushButton::clicked,this,[this,modeText]{m_preview->setThreeD(!m_preview->threeD());QSettings().setValue("ui/skin3d",m_preview->threeD());modeText();});
+    m_preview->setThreeD(QSettings().value("ui/skin3d",true).toBool());modeText();
     auto controls=new QVBoxLayout;layout->addLayout(controls,2);m_list=new QListWidget;m_list->setObjectName("skinList");controls->addWidget(m_list,1);connect(m_list,&QListWidget::currentRowChanged,this,[this]{showSkin();});
     m_details=new QLabel;m_details->setWordWrap(true);m_details->setTextFormat(Qt::PlainText);controls->addWidget(m_details);
     auto add=[&](QString title,std::function<void()> fn){auto b=new QPushButton(title);controls->addWidget(b);connect(b,&QPushButton::clicked,this,fn);return b;};
@@ -36,7 +43,7 @@ QIcon headIcon(const QImage &skin){const auto head=SkinManager::head(skin);if(he
 }
 void SkinsPage::refresh(){m_list->clear();m_list->setIconSize(QSize(32,32));
     try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();new QListWidgetItem(headIcon(QImage(o["file"].toString())),o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")),m_list);}
-        if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(Language::message(QString::fromUtf8(e.what())));}
+        if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setMessage(key("Skins"));}}catch(const std::exception &e){m_details->setText(Language::message(QString::fromUtf8(e.what())));}
     // The skin the Microsoft account wears now, from Mojang's profile service (cached), first in the list.
     const auto account=m_accounts->active();if(account.uuid.isEmpty())return;
     if(account.type!="msa"){showDefaultSkin(account.name,account.uuid);return;}
@@ -50,7 +57,7 @@ void SkinsPage::refresh(){m_list->clear();m_list->setIconSize(QSize(32,32));
         m_list->insertItem(0,new QListWidgetItem(headIcon(skin),name+" · "+key("Current skin")+" (Microsoft)"));m_list->setCurrentRow(0);});
     watcher->setFuture(QtConcurrent::run([uuid,file]{return SkinManager::fetchProfileSkin(uuid,file);}));
 }
-void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setPixmap(QPixmap::fromImage(SkinManager::preview(image,o["variant"].toString(),m_back)));m_details->setText(o["name"].toString());}
+void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setSkin(image,o["variant"].toString()=="slim");m_details->setText(o["name"].toString());}
 void SkinsPage::importSkin(){
     auto file=QFileDialog::getOpenFileName(this,key("Import PNG skin"),{},"PNG (*.png)");if(file.isEmpty())return;QDialog dialog(this);dialog.setWindowTitle(key("Import PNG skin"));QFormLayout form(&dialog);QLineEdit name(QFileInfo(file).completeBaseName());QComboBox variant;variant.addItem(key("Classic"),"classic");variant.addItem(key("Slim"),"slim");form.addRow(key("Name"),&name);form.addRow(key("Model"),&variant);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);if(Ui::openWindow(dialog)!=QDialog::Accepted)return;
     try{SkinManager(m_root).importSkin(file,name.text(),variant.currentData().toString());refresh();}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}

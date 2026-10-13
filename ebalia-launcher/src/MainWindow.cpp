@@ -24,6 +24,8 @@
 #include "CreateInstanceDialog.hpp"
 #include "PackService.hpp"
 #include "InstanceViews.hpp"
+#include "InstanceContent.hpp"
+#include "TitleBar.hpp"
 #include "InstanceIcons.hpp"
 #include "Icons.hpp"
 #include "Ui.hpp"
@@ -303,7 +305,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     m_patreon=new PatreonAuth(this);
     m_accounts=new AccountManager(m_mc->mcDir(),this);m_java=new JavaRunner(this);
     qApp->setStyleSheet(Ui::styleSheet()); // application-wide, so separate windows (new instance, settings, logs) share the look
-    build();setWindowTitle("EBALIA Launcher");setMinimumSize(640,480);Ui::fitToScreen(this,{1280,800});
+    build();setWindowTitle("EBALIA Launcher");TitleBar::install(this);setMinimumSize(640,480);Ui::fitToScreen(this,{1280,800});
     connect(m_mc,&McInstanceManager::manifestReady,this,[this](const QList<McVersion> &v){m_manifest=v;m_catalog->setText(text("Catálogo actualizado · ","Catalog updated · ","Catálogo atualizado · ")+QString::number(v.size())+text(" versiones"," versions"," versões"));});
     connect(m_mc,&McInstanceManager::manifestFailed,this,[this](const QString &e){m_catalog->setText(Language::message(e));});
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
@@ -440,6 +442,7 @@ QWidget *MainWindow::buildInstances() {
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
     m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
     m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));};
+    m_detail->manage=[this](const QString &folder){manageContent(folder);};
     m_detail->download=[this](const QString &kind){auto i=selected();if(!i.dir.isEmpty())discover(kind,i.dir);};
     m_detail->openFolder=[this](const QString &folder){auto i=selected();if(i.dir.isEmpty())return;auto path=folder.isEmpty()?i.dir:i.dir+"/"+folder;QDir().mkpath(path);QDesktopServices::openUrl(QUrl::fromLocalFile(path));};
     auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_library);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
@@ -1245,12 +1248,95 @@ void MainWindow::manageMods(){
                 }catch(...){}
                 QFile none(cached+".none");none.open(QIODevice::WriteOnly);return image;}));
         }};refresh();
-    auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);
+    // Two rows, so the buttons still fit at the smallest window size: the selected mod, then the folder.
+    auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);auto folderRow=new QHBoxLayout;folderRow->setSpacing(8);lay.addLayout(folderRow);
     button(text("Activar / desactivar","Enable / disable","Ativar / desativar"),row,[&]{if(!list.currentItem())return;auto name=list.currentItem()->text();auto to=name.endsWith(".disabled")?name.chopped(9):name+".disabled";if(!QFile::rename(i.dir+"/mods/"+name,i.dir+"/mods/"+to))error(text("No se pudo cambiar el archivo.","Could not change the file.","Não foi possível alterar o arquivo."));refresh();},&d,false,"square");
-    button(text("Agregar JAR local","Add local JAR","Adicionar JAR local"),row,[&]{for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"Mods (*.jar)")){QDir().mkpath(i.dir+"/mods");if(!QFile::copy(f,i.dir+"/mods/"+QFileInfo(f).fileName()))error(text("El archivo ya existe o no se puede copiar.","The file already exists or cannot be copied.","O arquivo já existe ou não pode ser copiado."));}refresh();},&d,false,"plus");
+    button(Language::key("Open folder"),folderRow,[&]{QDir().mkpath(i.dir+"/mods");QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir+"/mods"));},&d,false,"folder");
+    button(text("Agregar JAR local","Add local JAR","Adicionar JAR local"),folderRow,[&]{for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"Mods (*.jar)")){QDir().mkpath(i.dir+"/mods");if(!QFile::copy(f,i.dir+"/mods/"+QFileInfo(f).fileName()))error(text("El archivo ya existe o no se puede copiar.","The file already exists or cannot be copied.","O arquivo já existe ou não pode ser copiado."));}refresh();},&d,false,"plus");
     auto remove=button(text("Quitar mod","Remove mod","Remover mod"),row,[&]{if(!list.currentItem())return;auto name=list.currentItem()->text();QDir().mkpath(i.dir+"/removed-mods");if(!QFile::rename(i.dir+"/mods/"+name,i.dir+"/removed-mods/"+QString::number(QDateTime::currentMSecsSinceEpoch())+"-"+name))error(text("No se pudo mover el archivo.","Could not move the file.","Não foi possível mover o arquivo."));refresh();},&d,false,"trash-2");remove->setProperty("danger",true);
-    row->addStretch();button(text("Explorar mods compatibles","Find compatible mods","Buscar mods compatíveis"),row,[&]{d.accept();showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));searchMods();},&d,true,"compass");
+    row->addStretch();folderRow->addStretch();button(text("Explorar mods compatibles","Find compatible mods","Buscar mods compatíveis"),folderRow,[&]{d.accept();showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));searchMods();},&d,true,"compass");
     Ui::openWindow(d);refreshInstances();
+}
+void MainWindow::manageContent(const QString &folder){
+    auto i=selected();if(i.dir.isEmpty())return;
+    const bool packs=folder=="resourcepacks",shaders=folder=="shaderpacks",worlds=folder=="saves";if(!packs&&!shaders&&!worlds)return;
+    const auto heading=packs?Language::key("Resource packs"):shaders?Language::key("Shader packs"):Language::key("Worlds");const QString symbol=packs?"palette":shaders?"sparkles":"map";
+    QDialog d(this);d.setObjectName("contentWindow");d.setProperty("folder",folder);d.setWindowTitle(i.name+" · "+heading);Ui::fitToScreen(&d,{820,580});QVBoxLayout lay(&d);lay.setContentsMargins(20,18,20,18);lay.setSpacing(12);
+    label(i.name+" · "+heading,&lay,"sectionTitle",false);
+    // Shaders load through Iris (Fabric, Quilt, NeoForge) or Oculus (Forge); say so when the instance has neither.
+    bool shaderMod=false;for(const auto &jar:QDir(i.dir+"/mods").entryList({"*.jar"},QDir::Files))if(jar.contains("iris",Qt::CaseInsensitive)||jar.contains("oculus",Qt::CaseInsensitive))shaderMod=true;
+    label(packs?text("Los paquetes activados se cargan al abrir el juego; el último que actives queda arriba.","Packs turned on here load when the game starts; the last one turned on goes on top.","Os pacotes ativados carregam ao abrir o jogo; o último ativado fica em cima.")
+        :shaders?(i.loader=="vanilla"?text("Los shaders necesitan un cargador de mods (Fabric, Quilt, NeoForge o Forge) con Iris u Oculus.","Shaders need a mod loader (Fabric, Quilt, NeoForge or Forge) with Iris or Oculus.","Os shaders precisam de um carregador de mods (Fabric, Quilt, NeoForge ou Forge) com Iris ou Oculus.")
+            :shaderMod?text("Se usa un solo shader a la vez.","One shader pack is used at a time.","Um shader é usado por vez.")
+            :text("Esta instancia no tiene Iris ni Oculus: los shaders no se van a cargar hasta instalarlo.","This instance has neither Iris nor Oculus: shaders will not load until you install it.","Esta instância não tem Iris nem Oculus: os shaders não carregam até instalá-lo."))
+        :text("Los mundos quitados se guardan en removed-worlds, dentro de la carpeta de la instancia.","Removed worlds are kept in removed-worlds, inside the instance folder.","Os mundos removidos ficam em removed-worlds, dentro da pasta da instância."),&lay,"muted");
+    // Pictures and descriptions already read, so turning a pack on or off does not read every archive again.
+    QHash<QString,InstanceContent::Entry> known;
+    QListWidget list;list.setObjectName("contentList");list.setIconSize({48,48});lay.addWidget(&list,1);
+    auto detail=[packs,worlds](const InstanceContent::Entry &e){
+        if(worlds)return InstanceText::lastPlayed(e.modified.toSecsSinceEpoch());
+        const auto what=packs&&!e.description.isEmpty()?e.description:e.directory?text("Carpeta","Folder","Pasta"):QLocale().formattedDataSize(e.size);
+        return e.active?text("En uso","In use","Em uso")+"  ·  "+what:what;};
+    auto icon=[](const QImage &image){return QIcon(QPixmap::fromImage(image.scaled(48,48,Qt::KeepAspectRatio,image.width()<=48?Qt::FastTransformation:Qt::SmoothTransformation)));};
+    std::function<void(const QString&)> refresh=[&,folder,shaders](const QString &keep){
+        list.clear();const auto entries=InstanceContent::list(i.dir,folder);
+        if(entries.isEmpty()){auto empty=new QListWidgetItem(Ui::icon(symbol,dim),(packs?Language::key("No resource packs yet"):shaders?Language::key("No shader packs yet"):Language::key("No worlds yet"))+"\n"
+            +(worlds?text("Importá un mundo en ZIP o jugá para crear uno.","Import a world ZIP or play to create one.","Importe um mundo em ZIP ou jogue para criar um."):text("Descargalos o agregá un ZIP.","Download some or add a ZIP.","Baixe alguns ou adicione um ZIP.")),&list);empty->setFlags(Qt::ItemIsEnabled);return;}
+        for(const auto &e:entries){
+            auto item=new QListWidgetItem(Ui::icon(symbol,e.active||worlds?Ui::accent():dim),e.title+"\n"+detail(e),&list);item->setData(Qt::UserRole,e.file);item->setData(Qt::UserRole+1,e.active);
+            if(e.active){auto font=item->font();font.setBold(true);item->setFont(font);}
+            if(e.file==keep)list.setCurrentItem(item);
+            if(shaders)continue;
+            if(const auto cached=known.value(e.file);!cached.file.isEmpty()&&cached.modified==e.modified){
+                auto shown=e;shown.description=cached.description;if(!cached.icon.isNull())item->setIcon(icon(cached.icon));item->setText(e.title+"\n"+detail(shown));continue;}
+            // The pack's own picture and description, or the world's icon, read in the background.
+            auto watcher=new QFutureWatcher<InstanceContent::Entry>(&list);
+            connect(watcher,&QFutureWatcher<InstanceContent::Entry>::finished,&list,[watcher,&list,&known,detail,icon]{const auto e=watcher->result();watcher->deleteLater();known.insert(e.file,e);
+                for(int n=0;n<list.count();++n)if(auto item=list.item(n);item->data(Qt::UserRole).toString()==e.file){
+                    auto shown=e;shown.active=item->data(Qt::UserRole+1).toBool(); // turned on or off since it was read
+                    if(!e.icon.isNull())item->setIcon(icon(e.icon));item->setText(e.title+"\n"+detail(shown));}});
+            watcher->setFuture(QtConcurrent::run([dir=i.dir,folder,e]{return InstanceContent::describe(dir,folder,e);}));
+        }
+        if(!list.currentItem())list.setCurrentRow(0);};
+    auto current=[&]{auto item=list.currentItem();return item?item->data(Qt::UserRole).toString():QString();};
+    // The game rewrites options.txt and the shader settings when it closes, so nothing changes while it runs.
+    auto idle=[&]{if(!m_mc->isRunning(i.dir)&&!m_installing.contains(i.dir))return true;error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return false;};
+    // Unpacking or packing a world can take a while: the window waits without freezing.
+    auto background=[&](std::function<void()> job){
+        d.setEnabled(false);QApplication::setOverrideCursor(Qt::WaitCursor);QFutureWatcher<QString> watcher;QEventLoop loop;connect(&watcher,&QFutureWatcher<QString>::finished,&loop,&QEventLoop::quit);
+        watcher.setFuture(QtConcurrent::run([job]{try{job();return QString();}catch(...){return exception();}}));if(!watcher.isFinished())loop.exec();
+        QApplication::restoreOverrideCursor();d.setEnabled(true);if(!watcher.result().isEmpty()){error(watcher.result());return false;}return true;};
+    auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);auto folderRow=new QHBoxLayout;folderRow->setSpacing(8);lay.addLayout(folderRow);
+    QPushButton *toggle=nullptr;
+    if(!worlds){
+        toggle=button({},row,[&]{const auto file=current();if(file.isEmpty()||!idle())return;const bool on=list.currentItem()->data(Qt::UserRole+1).toBool();
+            try{if(packs)InstanceContent::setResourcePack(i.dir,file,!on);else InstanceContent::setShader(i.dir,on?QString():file);}catch(...){error(exception());}refresh(file);},&d,false,shaders?"sparkles":"square");
+        toggle->setObjectName("toggleContent");
+        auto relabel=[&,toggle]{const bool on=list.currentItem()&&list.currentItem()->data(Qt::UserRole+1).toBool();toggle->setEnabled(!current().isEmpty());
+            toggle->setText(packs?(on?text("Desactivar","Turn off","Desativar"):text("Activar","Turn on","Ativar")):(on?text("Apagar shaders","Turn shaders off","Desligar shaders"):text("Usar este shader","Use this shader","Usar este shader")));};
+        connect(&list,&QListWidget::currentItemChanged,&d,relabel);relabel();
+        connect(&list,&QListWidget::itemDoubleClicked,&d,[toggle](QListWidgetItem *item){if(item->data(Qt::UserRole).isValid())toggle->click();});
+    }else{
+        auto openWorld=[&]{const auto file=current();if(!file.isEmpty())QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir+"/saves/"+file));};
+        button(text("Abrir carpeta del mundo","Open world folder","Abrir pasta do mundo"),row,openWorld,&d,false,"folder");
+        connect(&list,&QListWidget::itemDoubleClicked,&d,[openWorld](QListWidgetItem *item){if(item->data(Qt::UserRole).isValid())openWorld();});
+        button(text("Exportar como ZIP","Export as ZIP","Exportar como ZIP"),row,[&]{const auto file=current();if(file.isEmpty()||!idle())return;
+            const auto zip=QFileDialog::getSaveFileName(&d,{},QDir::home().filePath(file+".zip"),"ZIP (*.zip)");if(zip.isEmpty())return;
+            if(background([dir=i.dir,file,zip]{InstanceContent::exportWorld(dir,file,zip);}))m_status->setText(text("Mundo guardado en %1","World saved to %1","Mundo salvo em %1").arg(QDir::toNativeSeparators(zip)));},&d,false,"archive");
+    }
+    auto remove=button(Language::key("Remove"),row,[&]{const auto file=current();if(file.isEmpty()||!idle())return;
+        if(worlds&&QMessageBox::question(&d,"EBALIA",text("¿Quitar «%1»? Se mueve a removed-worlds y lo podés recuperar desde la carpeta de la instancia.","Remove “%1”? It moves to removed-worlds and you can bring it back from the instance folder.","Remover “%1”? Ele vai para removed-worlds e pode ser recuperado na pasta da instância.").arg(file))!=QMessageBox::Yes)return;
+        try{InstanceContent::remove(i.dir,folder,file);}catch(...){error(exception());}refresh({});},&d,false,"trash-2");remove->setProperty("danger",true);remove->setObjectName("removeContent");
+    row->addStretch();
+    button(Language::key("Open folder"),folderRow,[&]{QDir().mkpath(i.dir+"/"+folder);QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir+"/"+folder));},&d,false,"folder");
+    button(worlds?text("Importar mundo (ZIP)","Import world (ZIP)","Importar mundo (ZIP)"):text("Agregar ZIP","Add ZIP","Adicionar ZIP"),folderRow,[&]{if(!idle())return;QString last;
+        for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"ZIP (*.zip)")){if(!background([&last,dir=i.dir,folder,f]{last=InstanceContent::add(dir,folder,f);}))break;}
+        refresh(last);},&d,false,worlds?"upload":"plus");
+    folderRow->addStretch();
+    if(shaders&&!shaderMod&&i.loader!="vanilla"){const bool forge=i.loader=="forge";const QString name=forge?"Oculus":"Iris Shaders";
+        button(text("Instalar %1","Install %1","Instalar %1").arg(name),folderRow,[&,forge,name]{d.accept();installProjects(QJsonArray{QJsonObject{{"project_id",forge?"GchcoXML":"YL57xq9U"},{"title",name}}},"mod");},&d,false,"download");}
+    if(!worlds)button(packs?text("Descargar paquetes de recursos","Download resource packs","Baixar pacotes de recursos"):text("Descargar shaders","Download shaders","Baixar shaders"),folderRow,[&]{d.accept();discover(packs?"resourcepack":"shader",i.dir);},&d,true,"download");
+    refresh({});Ui::openWindow(d);refreshInstances();
 }
 void MainWindow::savePack(){auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}bool ok;auto name=QInputDialog::getText(this,text("Guardar pack","Save pack","Salvar pack"),text("Nombre del pack","Pack name","Nome do pack"),QLineEdit::Normal,i.name,&ok);if(!ok||name.trimmed().isEmpty())return;auto root=m_root;work(text("Identificando tus mods en Modrinth…","Identifying your mods on Modrinth…","Identificando seus mods no Modrinth…"),[root,i,name]{ModRepository repo(root);auto p=repo.capture(i.dir,name);repo.savePack(p);return p;},[this](QJsonObject){refreshPacks();showPage(Packs);});}
 void MainWindow::applyPack(){

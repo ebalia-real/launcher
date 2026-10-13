@@ -139,6 +139,8 @@ QMenu{background:#1e1e22;border:1px solid #34343a;border-radius:10px;padding:6px
 #themeChoice:checked{border:2px solid #4a9e31;background:#2b3a27;color:#ffffff;}
 QToolTip{background:#26262b;color:#ffffff;border:1px solid #3a3a41;padding:5px;}
 #sidebar{background:#1b1b1e;border-right:1px solid #26262a;}
+#titleBar{background:#1b1b1e;border-bottom:1px solid #26262a;}#titleBarText{color:#9a9aa3;font-size:12px;font-weight:700;}
+#titleMinimize,#titleMaximize,#titleClose{border:0;border-radius:0;background:transparent;padding:0;}#titleMinimize:hover,#titleMaximize:hover{background:#2a2a2f;}#titleClose:hover{background:#c42b1c;}
 #accountButton{background:#232327;border:1px solid #2e2e33;border-radius:12px;padding:0;text-align:left;}#accountButton:hover{background:#2a2a2f;border-color:#3d3d44;}
 #brand{font-size:17px;font-weight:900;letter-spacing:3px;color:#ffffff;}#accountName{font-weight:800;font-size:14px;}#accountType,#sidebarVersion{color:#9a9aa3;font-size:11px;}
 #navigation{background:transparent;border:0;outline:0;padding:0;}

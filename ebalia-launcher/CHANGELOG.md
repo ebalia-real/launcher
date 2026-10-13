@@ -13,6 +13,15 @@
   textures were read).
 - Account pictures show the head of the skin the player wears (Microsoft) or gets by default (no premium) instead of
   the Xbox picture; a picture you chose still comes first. The Skins list shows each skin's head.
+- Resource packs, shader packs and worlds open their own window from the instance page (click anywhere on the card),
+  like mods: each pack with its picture and description, turn resource packs on or off and choose the shader pack the
+  game loads, add ZIPs, remove (kept in removed-… inside the instance), open the folder, and download more. Worlds:
+  open a world's folder, export it as a ZIP, import a world ZIP. The mods window also opens its folder.
+- The Skins page shows the skin on a 3D model: drag to turn it, double-click to face it again, Front / back gives it
+  half a turn. The flat view is one button away.
+- On GNOME and other Wayland desktops that leave the title bar to the app, EBALIA draws its own: double-click it to
+  maximize or restore, drag it to move the window, and resize from the edges. Windows, macOS, X11, KDE and the rest
+  keep the system's title bar, where double-click already does this. EBALIA_TITLE_BAR=system or custom forces either.
 
 # 1.1.7
 
