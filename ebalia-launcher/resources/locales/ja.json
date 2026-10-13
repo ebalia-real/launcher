@@ -994,5 +994,15 @@
   "Opening Bedrock…": "Bedrock を開いています…",
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "Bedrock を起動しています… Minecraft Linux が Google の認証情報の承認を求めたら、そのウィンドウで承認してください。",
   "Close Minecraft Linux first.": "先に Minecraft Linux を閉じてください。",
-  "Close Minecraft Linux before playing from EBALIA.": "EBALIA から遊ぶ前に Minecraft Linux を閉じてください。"
+  "Close Minecraft Linux before playing from EBALIA.": "EBALIA から遊ぶ前に Minecraft Linux を閉じてください。",
+  "DOWNLOAD": "ダウンロード",
+  "Install (%1)": "インストール (%1)",
+  "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "このインスタンスには Mod ローダーがありません。Fabric、Quilt、Forge、NeoForge のインスタンスを選ぶか、リソースパックを探してください。",
+  "%1 projects": "%1 件のプロジェクト",
+  "%1 installed.": "%1 をインストールしました。",
+  "These could not be installed:": "次のものはインストールできませんでした:",
+  "%1 installed. Turn it on in the game: Options › Resource Packs.": "%1 をインストールしました。ゲーム内の 設定 › リソースパック で有効にしてください。",
+  "%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.": "%1 をインストールしました。ゲーム内の 設定 › ビデオ設定 › シェーダーパック で選んでください。",
+  "Shaders need %1 to work in this instance. Install it now?": "このインスタンスでシェーダーを使うには %1 が必要です。今すぐインストールしますか？",
+  "%1 has no version for Minecraft %2.": "%1 には Minecraft %2 用のバージョンがありません。"
 }

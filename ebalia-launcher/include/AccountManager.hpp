@@ -41,6 +41,9 @@ public:
     bool hasCustomPicture(const QString &uuid) const;
     void setCustomPicture(const QString &uuid, const QImage &picture);
     void clearCustomPicture(const QString &uuid);
+    // The head of the skin the player wears (avatars/<uuid>-skin.png): shown instead of the Xbox picture, drawn pixel
+    // by pixel; a picture the player chose still comes first.
+    void setSkinHead(const QString &uuid, const QImage &head);
 
 signals:
     void accountsChanged();

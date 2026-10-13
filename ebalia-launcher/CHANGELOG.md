@@ -1,3 +1,19 @@
+# 1.1.8
+
+- Fixed: the Install and Open page buttons of the mod page closed the launcher on every system (and so could the
+  "Install <mod>" and "Download the driver" buttons of the crash summary).
+- Discover has a single Install button: it installs every selected entry (Ctrl or Shift to choose several) and says
+  how many; mods that have no version for the instance are listed while the rest install.
+- Resource packs and shaders from CurseForge and Modrinth: choose Mods, Resource packs or Shader packs in Discover, or
+  press Download on those cards of an instance. Shaders offer Iris (Fabric, Quilt, NeoForge) or Oculus (Forge) when
+  the instance has neither. Vanilla instances can get resource packs.
+- The mod page shows the mod's gallery: thumbnails, and the pictures large with ◀ ▶ and the arrow keys.
+- The mod's icon is centred and no longer touches the panel's edge when the mod has no banner picture.
+- The instance icon menu always shows the same pictures as the instances (it kept the bundled ones after the game's
+  textures were read).
+- Account pictures show the head of the skin the player wears (Microsoft) or gets by default (no premium) instead of
+  the Xbox picture; a picture you chose still comes first. The Skins list shows each skin's head.
+
 # 1.1.7
 
 - Bedrock on Linux and macOS goes through Minecraft Linux's own profile mode, which checks the Google Play purchase and loads its compatibility module: the version you choose in EBALIA starts like from its Play button. APK import and the direct game start are gone (they skipped the purchase check).

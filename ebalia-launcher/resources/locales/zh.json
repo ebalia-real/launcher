@@ -994,5 +994,15 @@
   "Opening Bedrock…": "正在打开基岩版…",
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "基岩版正在启动…如果 Minecraft Linux 请你批准 Google 凭据，请在它的窗口中同意。",
   "Close Minecraft Linux first.": "请先关闭 Minecraft Linux。",
-  "Close Minecraft Linux before playing from EBALIA.": "从 EBALIA 游玩前请先关闭 Minecraft Linux。"
+  "Close Minecraft Linux before playing from EBALIA.": "从 EBALIA 游玩前请先关闭 Minecraft Linux。",
+  "DOWNLOAD": "下载",
+  "Install (%1)": "安装 (%1)",
+  "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "此实例没有模组加载器。请选择使用 Fabric、Quilt、Forge 或 NeoForge 的实例，或搜索资源包。",
+  "%1 projects": "%1 个项目",
+  "%1 installed.": "已安装 %1。",
+  "These could not be installed:": "以下内容无法安装：",
+  "%1 installed. Turn it on in the game: Options › Resource Packs.": "已安装 %1。请在游戏中启用：选项 › 资源包。",
+  "%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.": "已安装 %1。请在游戏中选择：选项 › 视频设置 › 光影包。",
+  "Shaders need %1 to work in this instance. Install it now?": "光影需要 %1 才能在此实例中运行。现在安装吗？",
+  "%1 has no version for Minecraft %2.": "%1 没有适用于 Minecraft %2 的版本。"
 }

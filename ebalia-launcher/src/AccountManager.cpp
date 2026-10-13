@@ -96,7 +96,11 @@ void AccountManager::removeAccount(const QString &uuid)
     for (int i = 0; i < m_accounts.size(); ++i)
         if (m_accounts[i].uuid == uuid) {
             m_accounts.removeAt(i);
-            QFile::remove(picturePath(uuid));
+            const QString path = picturePath(uuid);
+            if (!path.isEmpty()) {
+                QFile::remove(path);
+                QFile::remove(path.chopped(4) + QStringLiteral("-skin.png"));
+            }
             break;
         }
     if (m_activeUuid == uuid)
@@ -173,12 +177,32 @@ void AccountManager::clearCustomPicture(const QString &uuid)
         emit accountsChanged();
 }
 
+void AccountManager::setSkinHead(const QString &uuid, const QImage &head)
+{
+    const QString path = picturePath(uuid);
+    if (path.isEmpty() || head.isNull())
+        return;
+    const QString file = path.chopped(4) + QStringLiteral("-skin.png");
+    if (QImage(file) == head.convertToFormat(QImage::Format_ARGB32))
+        return;
+    QDir().mkpath(m_dir + QStringLiteral("/avatars"));
+    QSaveFile f(file);
+    if (f.open(QIODevice::WriteOnly) && head.save(&f, "PNG") && f.commit())
+        emit accountsChanged();
+}
+
 QPixmap AccountManager::picture(const McAccount &account, int size) const
 {
     if (hasCustomPicture(account.uuid)) {
         const QPixmap custom(picturePath(account.uuid).chopped(4) + QStringLiteral("-custom.png"));
         if (!custom.isNull())
             return Ui::cover(custom, QSize(size, size), int(size * 0.28));
+    }
+    const QString path = picturePath(account.uuid);
+    if (!path.isEmpty()) {
+        const QImage head(path.chopped(4) + QStringLiteral("-skin.png"));
+        if (!head.isNull()) // pixel art: enlarged without blurring, then given the rounded corners
+            return Ui::cover(QPixmap::fromImage(head.scaled(size, size, Qt::IgnoreAspectRatio, Qt::FastTransformation)), QSize(size, size), int(size * 0.2));
     }
     if (hasPicture(account.uuid)) {
         const QPixmap source(picturePath(account.uuid));

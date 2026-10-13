@@ -115,7 +115,10 @@ bool InstanceIcons::saveCustom(const QString &dir,const QImage &picture){
 }
 QMenu *InstanceIcons::menu(QWidget *parent,std::function<void(const QString &,const QImage &)> chosen){
     auto menu=new QMenu(parent);menu->setObjectName("instanceIconMenu");
-    for(const auto &key:keys()){auto action=menu->addAction(icon(key),name(key));QObject::connect(action,&QAction::triggered,parent,[key,chosen]{chosen(key,{});});}
+    for(const auto &key:keys()){auto action=menu->addAction(icon(key),name(key));action->setData(key);QObject::connect(action,&QAction::triggered,parent,[key,chosen]{chosen(key,{});});}
+    // Menus built before the game's textures were read would keep the bundled pictures: refresh them on every opening,
+    // so the menu always shows the same pictures as the instances.
+    QObject::connect(menu,&QMenu::aboutToShow,menu,[menu]{for(auto action:menu->actions())if(const auto key=action->data().toString();!key.isEmpty())action->setIcon(icon(key));});
     menu->addSeparator();
     auto custom=menu->addAction(Ui::icon("image",QColor(200,200,206)),Language::key("Choose an image from your computer…"));custom->setObjectName("customInstanceIcon");
     QObject::connect(custom,&QAction::triggered,parent,[parent,chosen]{auto image=chooseImage(parent);if(!image.isNull())chosen("custom",image);});

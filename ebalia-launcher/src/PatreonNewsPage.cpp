@@ -74,7 +74,7 @@ PatreonNewsPage::PatreonNewsPage(PatreonAuth *auth,QWidget *parent):QWidget(pare
     auto name=new QLabel;name->setObjectName("patreonMember");name->setTextFormat(Qt::PlainText);name->setStyleSheet("font-size:19px;font-weight:800;color:white;");who->addWidget(name);
     auto status=new QLabel;status->setObjectName("patreonNewsStatus");status->setWordWrap(true);status->setStyleSheet("color:#c9b9b6;font-size:13px;");who->addWidget(status);
     auto actions=new QHBoxLayout;actions->setSpacing(8);top->box()->addLayout(actions);
-    auto add=[actions](const QString &text,const char *name,const QString &icon,std::function<void()> action){auto b=new QPushButton(text);b->setObjectName(name);b->setCursor(Qt::PointingHandCursor);if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,QColor(235,235,240)));b->setIconSize({16,16});}actions->addWidget(b);QObject::connect(b,&QPushButton::clicked,b,action);return b;};
+    auto add=[actions](const QString &text,const char *name,const QString &icon,std::function<void()> action){auto b=new QPushButton(text);b->setObjectName(name);b->setCursor(Qt::PointingHandCursor);if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,QColor(235,235,240)));b->setIconSize({16,16});}actions->addWidget(b);if(action)QObject::connect(b,&QPushButton::clicked,b,action);return b;};
     auto link=add(" "+t("Link Patreon"),"newsLinkPatreon","heart",[auth]{auth->startLogin();});link->setProperty("patreon",true);link->setIcon(Ui::icon("heart",Qt::white));
     auto unlink=add(t("Unlink"),"newsUnlinkPatreon",{},[auth]{auth->logout();});
     auto refresh=add({},"newsRefreshPatreon","refresh-cw",[auth]{auth->refreshNews();});refresh->setToolTip(t("Refresh now"));refresh->setAccessibleName(refresh->toolTip());refresh->setFixedWidth(42);

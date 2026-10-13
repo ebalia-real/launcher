@@ -29,26 +29,26 @@ SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *in
     connect(m_accounts,&AccountManager::accountsChanged,this,[this]{refresh();});
     auto note=new QLabel(key("Microsoft skins are visible on servers. Local skins only change default textures on this client; other default players may also look different."));note->setWordWrap(true);note->setObjectName("muted");controls->addWidget(note);refresh();
 }
-void SkinsPage::refresh(){m_list->clear();try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();m_list->addItem(o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")));}if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(Language::message(QString::fromUtf8(e.what())));}
+namespace {
+// The player's head next to each skin in the list, enlarged pixel by pixel.
+QIcon headIcon(const QImage &skin){const auto head=SkinManager::head(skin);if(head.isNull())return {};const auto face=QPixmap::fromImage(head.scaled(32,32,Qt::IgnoreAspectRatio,Qt::FastTransformation));
+    QIcon icon(face);icon.addPixmap(face,QIcon::Selected);return icon;} // the same face when selected, not a dimmed copy
+}
+void SkinsPage::refresh(){m_list->clear();m_list->setIconSize(QSize(32,32));
+    try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();new QListWidgetItem(headIcon(QImage(o["file"].toString())),o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")),m_list);}
+        if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(Language::message(QString::fromUtf8(e.what())));}
     // The skin the Microsoft account wears now, from Mojang's profile service (cached), first in the list.
     const auto account=m_accounts->active();if(account.uuid.isEmpty())return;
     if(account.type!="msa"){showDefaultSkin(account.name,account.uuid);return;}
-    const auto uuid=QString(account.uuid).remove('-');const auto file=m_root+"/mc/cache/skins/"+uuid+".png";const auto name=account.name;
-    auto watcher=new QFutureWatcher<QJsonObject>(this);
-    connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,file,name]{
-        const auto r=watcher->result();watcher->deleteLater();if(!QFile::exists(file))return;
+    const auto uuid=QString(account.uuid).remove('-');const auto file=m_root+"/mc/cache/skins/"+uuid+".png";const auto name=account.name,id=account.uuid;
+    auto watcher=new QFutureWatcher<QString>(this);
+    connect(watcher,&QFutureWatcher<QString>::finished,this,[this,watcher,file,name,id]{
+        const auto variant=watcher->result();watcher->deleteLater();const QImage skin(file);if(skin.isNull())return;
+        m_accounts->setSkinHead(id,SkinManager::head(skin)); // the account's picture follows the skin it wears
         for(int n=0;n<m_skins.size();++n)if(m_skins[n].toObject()["current"].toBool())return;
-        m_skins.prepend(QJsonObject{{"name",name+" · "+key("Current skin")},{"file",file},{"variant",r["variant"].toString("classic")},{"current",true}});
-        m_list->insertItem(0,name+" · "+key("Current skin")+" (Microsoft)");m_list->setCurrentRow(0);});
-    watcher->setFuture(QtConcurrent::run([uuid,file]{
-        QString variant="classic";
-        try{const auto profile=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://sessionserver.mojang.com/session/minecraft/profile/"+uuid))).object();
-            for(const auto &p:profile["properties"].toArray()){if(p.toObject()["name"]!="textures")continue;
-                const auto textures=QJsonDocument::fromJson(QByteArray::fromBase64(p.toObject()["value"].toString().toLatin1())).object()["textures"].toObject()["SKIN"].toObject();
-                const QUrl url(textures["url"].toString());if(textures["metadata"].toObject()["model"].toString()=="slim")variant="slim";
-                if(url.isValid()&&(url.host()=="textures.minecraft.net")){QImage image;if(image.loadFromData(ModRepository::fetch(QUrl("https://textures.minecraft.net"+url.path())))){QDir().mkpath(QFileInfo(file).absolutePath());image.save(file,"PNG");}}}
-        }catch(...){} // offline: the last skin seen stays
-        return QJsonObject{{"variant",variant}};}));
+        m_skins.prepend(QJsonObject{{"name",name+" · "+key("Current skin")},{"file",file},{"variant",variant},{"current",true}});
+        m_list->insertItem(0,new QListWidgetItem(headIcon(skin),name+" · "+key("Current skin")+" (Microsoft)"));m_list->setCurrentRow(0);});
+    watcher->setFuture(QtConcurrent::run([uuid,file]{return SkinManager::fetchProfileSkin(uuid,file);}));
 }
 void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setPixmap(QPixmap::fromImage(SkinManager::preview(image,o["variant"].toString(),m_back)));m_details->setText(o["name"].toString());}
 void SkinsPage::importSkin(){
@@ -69,25 +69,15 @@ void SkinsPage::apply(bool local){
     connect(&auth,&MsAuth::loginFailed,&progress,[&](const QString &error){progress.reject();QMessageBox::warning(this,"EBALIA",Language::message(error));});
     QTimer::singleShot(0,&auth,[&]{auth.refresh(account.refreshToken);});progress.exec();auth.cancel();if(token.isEmpty())return;
     m_accounts->addAccount({"msa",name,uuid,token,refresh});
-    m_work(key("Applying skin…"),[=]{SkinManager::upload(file,variant,token);return QJsonObject{};},[this](QJsonObject){m_details->setText(key("Skin applied. Start the game to see it."));});
+    m_work(key("Applying skin…"),[=]{SkinManager::upload(file,variant,token);return QJsonObject{};},[this,file,uuid](QJsonObject){m_accounts->setSkinHead(uuid,SkinManager::head(QImage(file)));m_details->setText(key("Skin applied. Start the game to see it."));});
 }
 
-// Profiles without Minecraft (no premium) wear one of the game's default skins, chosen from the player's UUID exactly
-// as Minecraft does (DefaultPlayerSkin: floorMod(uuid.hashCode(), 18), slim skins first). Read from the downloaded game.
+// Profiles without Minecraft (no premium) wear one of the game's default skins (see SkinManager::defaultSkin).
 void SkinsPage::showDefaultSkin(const QString &name,const QString &uuid){
-    const auto hex=QString(uuid).remove('-');if(hex.size()!=32)return;
-    const quint64 most=hex.left(16).toULongLong(nullptr,16),least=hex.mid(16).toULongLong(nullptr,16),hilo=most^least;
-    const qint32 hash=qint32(quint32(hilo>>32)^quint32(hilo&0xffffffffu));const int index=((hash%18)+18)%18;
-    static const char *names[]{"alex","ari","efe","kai","makena","noor","steve","sunny","zuri"};
-    const bool slim=index<9;const QString skin=names[index%9];
-    QString jar;QDateTime newest;
-    for(const auto &v:QDir(m_root+"/mc/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot)){const QFileInfo f(v.filePath()+"/"+v.fileName()+".jar");if(f.exists()&&f.size()>1000000&&(jar.isEmpty()||f.lastModified()>newest)){jar=f.filePath();newest=f.lastModified();}}
-    QImage image;
-    if(!jar.isEmpty())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/player/"+QString(slim?"slim/":"wide/")+skin+".png",1024*1024),"PNG");}catch(...){}
-    if(image.isNull()&&!jar.isEmpty())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/steve.png",1024*1024),"PNG");}catch(...){} // versions before 1.19.3
-    if(image.isNull())return;
-    const auto file=m_root+"/mc/cache/skins/default-"+hex+".png";QDir().mkpath(QFileInfo(file).absolutePath());image.save(file,"PNG");
+    bool slim=false;QString skin;const auto image=SkinManager::defaultSkin(m_root,uuid,&slim,&skin);if(image.isNull())return;
+    const auto file=m_root+"/mc/cache/skins/default-"+QString(uuid).remove('-')+".png";QDir().mkpath(QFileInfo(file).absolutePath());image.save(file,"PNG");
+    m_accounts->setSkinHead(uuid,SkinManager::head(image));
     const auto title=name+" · "+key("Current skin")+" ("+QString(skin).replace(0,1,skin.left(1).toUpper())+")";
     m_skins.prepend(QJsonObject{{"name",title+" — "+key("No premium: in-game default skin. Apply a skin locally to change it.")},{"file",file},{"variant",slim?"slim":"classic"},{"current",true}});
-    m_list->insertItem(0,title);m_list->setCurrentRow(0);
+    m_list->insertItem(0,new QListWidgetItem(headIcon(image),title));m_list->setCurrentRow(0);
 }

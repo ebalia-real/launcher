@@ -9,7 +9,7 @@
 namespace {
 QString trc(const char *s){return Language::key(QString::fromUtf8(s));}
 QLabel *label(const QString &text,QVBoxLayout *l,const char *name="muted"){auto w=new QLabel(text);w->setTextFormat(Qt::PlainText);w->setWordWrap(true);w->setObjectName(name);l->addWidget(w);return w;}
-QPushButton *button(const QString &text,QBoxLayout *l,QObject *context,std::function<void()> action){auto b=new QPushButton(QString(text).replace("&","&&"));l->addWidget(b);QObject::connect(b,&QPushButton::clicked,context,action);return b;}
+QPushButton *button(const QString &text,QBoxLayout *l,QObject *context,std::function<void()> action){auto b=new QPushButton(QString(text).replace("&","&&"));l->addWidget(b);if(action)QObject::connect(b,&QPushButton::clicked,context,action);return b;}
 void link(const QString &text,const QString &url,QBoxLayout *l,QObject *context){auto b=button(text+"  ↗",l,context,[url]{QDesktopServices::openUrl(QUrl(url));});b->setToolTip(url);}
 // Calls back when the watched widget changes size (the fan art grid reflows to the window width).
 class OnResize:public QObject {

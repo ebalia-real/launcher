@@ -2,6 +2,7 @@
 #include "BuildConfig.hpp"
 #include "Language.hpp"
 #include "ModPage.hpp"
+#include "Download.hpp"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -92,20 +93,26 @@ QJsonDocument ModRepository::api(const QString &path, const QList<QPair<QString,
     if (error.error != QJsonParseError::NoError || doc.isNull()) fail("Respuesta inválida de Modrinth.");
     return doc;
 }
-QJsonArray ModRepository::search(const QString &q, const QString &game, const QString &loader, int offset, const QString &provider) {
-    if (loader == "vanilla") fail(Language::text("Elegí una instancia Fabric, Quilt, Forge o NeoForge para instalar mods.","Choose a Fabric, Quilt, Forge or NeoForge instance to install mods.","Escolha uma instância Fabric, Quilt, Forge ou NeoForge para instalar mods."));
+QJsonArray ModRepository::search(const QString &q, const QString &game, const QString &loader, int offset, const QString &provider, const QString &kind) {
+    const bool mod = kind == "mod";
+    if (kind != "mod" && kind != "resourcepack" && kind != "shader") fail("Invalid project.");
+    if (mod && loader == "vanilla") fail(Language::text("Elegí una instancia Fabric, Quilt, Forge o NeoForge para instalar mods.","Choose a Fabric, Quilt, Forge or NeoForge instance to install mods.","Escolha uma instância Fabric, Quilt, Forge ou NeoForge para instalar mods."));
     if(provider=="curseforge") {
         int type=loader=="forge"?1:loader=="fabric"?4:loader=="quilt"?5:loader=="neoforge"?6:0;
-        auto data=curse("mods/search",{{"gameId","432"},{"classId","6"},{"gameVersion",game},{"modLoaderType",QString::number(type)},
-            {"searchFilter",q},{"sortField","2"},{"sortOrder","desc"},{"index",QString::number(offset)},{"pageSize","30"}}).object()["data"].toArray();
+        // CurseForge classes: 6 mods, 12 resource packs, 6552 shaders.
+        QList<QPair<QString,QString>> query{{"gameId","432"},{"classId",mod?"6":kind=="shader"?"6552":"12"},{"gameVersion",game},
+            {"searchFilter",q},{"sortField","2"},{"sortOrder","desc"},{"index",QString::number(offset)},{"pageSize","30"}};
+        if(mod)query.append({"modLoaderType",QString::number(type)});
+        auto data=curse("mods/search",query).object()["data"].toArray();
         QJsonArray hits;for(const auto &v:data){auto o=v.toObject();QStringList authors;for(const auto &a:o["authors"].toArray())authors<<a.toObject()["name"].toString();
             // Only mods with a file for this exact game version and loader.
-            bool fits=false;for(const auto &f:o["latestFilesIndexes"].toArray())if(f.toObject()["gameVersion"].toString()==game&&f.toObject()["modLoader"].toInt()==type)fits=true;if(!fits&&!o["latestFilesIndexes"].toArray().isEmpty())continue;
+            bool fits=false;for(const auto &f:o["latestFilesIndexes"].toArray())if(f.toObject()["gameVersion"].toString()==game&&(!mod||f.toObject()["modLoader"].toInt()==type))fits=true;if(!fits&&!o["latestFilesIndexes"].toArray().isEmpty())continue;
             QJsonArray gallery;for(const auto &shot:o["screenshots"].toArray())gallery.append(shot.toObject()["url"]);
             hits.append(QJsonObject{{"project_id","cf-"+QString::number(o["id"].toInteger())},{"title",o["name"]},{"description",o["summary"]},{"author",authors.join(", ")},{"provider","curseforge"},{"slug",o["slug"]},{"website",o["links"].toObject()["websiteUrl"]},{"icon_url",o["logo"].toObject()["thumbnailUrl"]},{"downloads",o["downloadCount"]},{"gallery",gallery}});
         }return hits;
     }
-    QJsonArray facets{QJsonArray{"project_type:mod"}, QJsonArray{"versions:" + game}, QJsonArray{"categories:" + loader}};
+    QJsonArray facets{QJsonArray{"project_type:" + kind}, QJsonArray{"versions:" + game}};
+    if (mod) facets.append(QJsonArray{"categories:" + loader});
     return api("search", {{"query", q}, {"facets", QString::fromUtf8(QJsonDocument(facets).toJson(QJsonDocument::Compact))},
         {"limit", "30"}, {"offset", QString::number(offset)}}).object()["hits"].toArray();
 }
@@ -121,8 +128,45 @@ QJsonObject ModRepository::details(const QString &projectId) {
     if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(projectId).hasMatch()) fail("Invalid project.");
     const auto project = api("project/" + projectId).object();
     QJsonArray gallery; for (const auto &g : project["gallery"].toArray()) gallery.append(g.toObject()["url"]);
+    const auto type = project["project_type"].toString("mod");
     return {{"body", ModPage::html(project["body"].toString(), true)}, {"format", "html"}, {"gallery", gallery}, {"downloads", project["downloads"]},
-            {"url", "https://modrinth.com/mod/" + project["slug"].toString()}};
+            {"url", "https://modrinth.com/" + (QStringList{"mod", "resourcepack", "shader", "modpack", "datapack"}.contains(type) ? type : QString("mod")) + "/" + project["slug"].toString()}};
+}
+QJsonObject ModRepository::installPack(const QString &instance, const QString &projectId, const QString &game, const QString &kind) {
+    if (kind != "resourcepack" && kind != "shader") fail("Invalid project.");
+    // The newest file of the pack made for this game version.
+    QString url, filename, sha1, title;
+    if (projectId.startsWith("cf-")) {
+        const auto id = projectId.mid(3);
+        if (!QRegularExpression("^[0-9]+$").match(id).hasMatch()) fail("Invalid project.");
+        title = curse("mods/" + id, {}).object()["data"].toObject()["name"].toString();
+        const auto files = curse("mods/" + id + "/files", {{"gameVersion", game}, {"pageSize", "25"}}).object()["data"].toArray();
+        if (files.isEmpty()) fail(Language::text("%1 no tiene una versión para Minecraft %2.", "%1 has no version for Minecraft %2.", "%1 não tem uma versão para o Minecraft %2.").arg(title, game));
+        const auto file = files.first().toObject();
+        url = file["downloadUrl"].toString(); filename = file["fileName"].toString();
+        if (url.isEmpty()) fail(("Manual download required by the author: " + curse("mods/" + id, {}).object()["data"].toObject()["links"].toObject()["websiteUrl"].toString()));
+        for (const auto &h : file["hashes"].toArray()) if (h.toObject()["algo"].toInt() == 1) sha1 = h.toObject()["value"].toString().toLower();
+    } else {
+        if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(projectId).hasMatch()) fail("Invalid project.");
+        title = api("project/" + projectId).object()["title"].toString();
+        const auto versions = api("project/" + projectId + "/version", {{"game_versions", QString::fromUtf8(QJsonDocument(QJsonArray{game}).toJson(QJsonDocument::Compact))}}).array();
+        if (versions.isEmpty()) fail(Language::text("%1 no tiene una versión para Minecraft %2.", "%1 has no version for Minecraft %2.", "%1 não tem uma versão para o Minecraft %2.").arg(title, game));
+        const auto files = versions.first().toObject()["files"].toArray();
+        QJsonObject file = files.isEmpty() ? QJsonObject{} : files.first().toObject();
+        for (const auto &f : files) if (f.toObject()["primary"].toBool()) file = f.toObject();
+        url = file["url"].toString(); filename = file["filename"].toString(); sha1 = file["hashes"].toObject()["sha1"].toString().toLower();
+    }
+    const QUrl source(url);
+    if (source.scheme() != "https" || !safeName(filename) || !QRegularExpression("^[0-9a-f]{40}$").match(sha1).hasMatch()) fail("Nombre de archivo o hash inválido.");
+    const auto folder = instance + (kind == "shader" ? "/shaderpacks" : "/resourcepacks");
+    QDir().mkpath(folder);
+    const auto target = folder + "/" + filename;
+    if (m_transport) {
+        const auto bytes = get(source);
+        if (QCryptographicHash::hash(bytes, QCryptographicHash::Sha1).toHex() != sha1.toLatin1()) fail("Download checksum mismatch: " + filename);
+        QSaveFile out(target); if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) fail("No se puede guardar: " + target);
+    } else Download::file(source, target, sha1.toLatin1(), QCryptographicHash::Sha1);
+    return {{"filename", filename}, {"title", title}};
 }
 QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString,QString>> &items) {
     QUrl url("https://api.curseforge.com/v1/"+path);QUrlQuery query;for(const auto &item:items)query.addQueryItem(item.first,item.second);url.setQuery(query);

@@ -379,6 +379,41 @@ private slots:
         // A small explicit width stays (icons), a huge one goes.
         QVERIFY(ModPage::html("<img src=\"https://a/b.png\" width=\"150\">",false).contains("width=\"150\""));QVERIFY(!ModPage::html("<img src=\"https://a/b.png\" width=\"1200\" height=\"300\">",false).contains("1200"));
     }
+    void packSearchAndInstall(){
+        // Resource packs and shaders: the stores are asked for that kind only (no loader), and the newest file for the
+        // game version lands in resourcepacks/ or shaderpacks/ after its checksum is verified.
+        QTemporaryDir t;QStringList asked;const QByteArray pack="pack-bytes";
+        const auto sha=QString::fromLatin1(QCryptographicHash::hash(pack,QCryptographicHash::Sha1).toHex());
+        ModRepository repo(t.path(),[&](const QUrl &url)->QByteArray{asked<<QUrl::fromPercentEncoding(url.toEncoded());
+            if(url.host()=="cdn.modrinth.com")return pack;
+            if(url.path().endsWith("/search"))return encode(QJsonObject{{"hits",QJsonArray{}}});
+            if(url.path().endsWith("/version"))return encode(QJsonArray{QJsonObject{{"files",QJsonArray{QJsonObject{{"url","https://cdn.modrinth.com/data/x/pack.zip"},{"filename","Faithful.zip"},{"primary",true},{"hashes",QJsonObject{{"sha1",sha}}}}}}}});
+            return encode(QJsonObject{{"title","Faithful"},{"project_type","resourcepack"},{"slug","faithful"}});});
+        repo.search("",QStringLiteral("1.21.1"),"vanilla",0,"modrinth","resourcepack");
+        QVERIFY(asked.last().contains("project_type:resourcepack"));QVERIFY(!asked.last().contains("categories:"));
+        repo.search("","1.21.1","fabric",0,"modrinth","shader");QVERIFY(asked.last().contains("project_type:shader"));
+        QVERIFY_EXCEPTION_THROWN(repo.search("","1.21.1","vanilla",0,"modrinth","mod"),std::runtime_error);
+        McInstanceManager manager(t.path());const auto dir=manager.createInstance("Packs","1.21.1","vanilla");
+        const auto r=repo.installPack(dir,"faithful","1.21.1","resourcepack");
+        QCOMPARE(r["filename"].toString(),QString("Faithful.zip"));QCOMPARE(readFile(dir+"/resourcepacks/Faithful.zip"),pack);
+        QVERIFY(asked.contains("https://api.modrinth.com/v2/project/faithful/version?game_versions=[\"1.21.1\"]"));
+        QVERIFY_EXCEPTION_THROWN(repo.installPack(dir,"../escape","1.21.1","resourcepack"),std::runtime_error);
+        // CurseForge: texture packs are class 12, shaders 6552, and no loader type is sent.
+        QStringList curse;ModRepository cf(t.path(),[&](const QUrl &url){curse<<QUrl::fromPercentEncoding(url.toEncoded());return encode(QJsonObject{{"data",QJsonArray{}}});});
+        cf.search("","1.21.1","fabric",0,"curseforge","shader");QVERIFY(curse.last().contains("classId=6552"));QVERIFY(!curse.last().contains("modLoaderType"));
+        cf.search("","1.21.1","fabric",0,"curseforge","resourcepack");QVERIFY(curse.last().contains("classId=12"));
+    }
+    void skinHead(){
+        // The face (8,8) with the hat layer (40,8) drawn over it when that layer has transparency.
+        QImage skin(64,64,QImage::Format_ARGB32);skin.fill(Qt::transparent);
+        for(int y=8;y<16;++y)for(int x=8;x<16;++x)skin.setPixelColor(x,y,QColor(200,150,100));
+        skin.setPixelColor(40,8,QColor(10,20,30));
+        auto head=SkinManager::head(skin);QCOMPARE(head.size(),QSize(8,8));QCOMPARE(head.pixelColor(0,0),QColor(10,20,30));QCOMPARE(head.pixelColor(4,4),QColor(200,150,100));
+        // An opaque hat layer (old skins) is ignored, as in the game.
+        for(int y=8;y<16;++y)for(int x=40;x<48;++x)skin.setPixelColor(x,y,QColor(0,0,0));
+        QCOMPARE(SkinManager::head(skin).pixelColor(4,4),QColor(200,150,100));
+        QVERIFY(SkinManager::head(QImage(16,16,QImage::Format_ARGB32)).isNull());
+    }
     void curseForgeAdapter(){
         QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("CF","1.20.1","fabric");
         auto file=[](int id,int project,QString name,QByteArray data,QJsonArray deps=QJsonArray{}){

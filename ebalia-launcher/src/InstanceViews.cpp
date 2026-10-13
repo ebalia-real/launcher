@@ -163,8 +163,15 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
         auto icon=new QLabel;icon->setObjectName("statIcon");m_cardIcons<<icon;icon->setFixedSize(40,40);icon->setAlignment(Qt::AlignCenter);icon->setPixmap(Ui::pixmap(stats[n].icon,22,Ui::accent()));cl->addWidget(icon);
         auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");cl->addWidget(title);
         auto value=muted({});m_counts<<value;cl->addWidget(value);cl->addStretch();
-        auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);cl->addWidget(action);
+        auto links=new QHBoxLayout;links->setSpacing(14);cl->addLayout(links);
+        auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);links->addWidget(action);
         const auto folder=stats[n].folder;connect(action,&QPushButton::clicked,this,[this,folder]{if(folder=="mods"){if(mods)mods();}else if(openFolder)openFolder(folder);});
+        // Resource and shader packs from CurseForge and Modrinth, straight from their card.
+        if(folder=="resourcepacks"||folder=="shaderpacks"){
+            auto get=new QPushButton(t("DOWNLOAD"));get->setObjectName(folder=="resourcepacks"?"downloadResourcePacks":"downloadShaderPacks");get->setProperty("link",true);get->setCursor(Qt::PointingHandCursor);links->addWidget(get);
+            connect(get,&QPushButton::clicked,this,[this,folder]{if(download)download(folder=="resourcepacks"?"resourcepack":"shader");});
+        }
+        links->addStretch();
     }
     auto actions=new QHBoxLayout;actions->setSpacing(8);l->addLayout(actions);
     auto action=[this,actions](const QString &text,const QString &icon,const char *name,std::function<void()> InstanceDetail::*callback){auto b=iconButton(text,icon,name);b->setToolTip(text);b->setAccessibleName(text);m_actions<<qMakePair(b,text);actions->addWidget(b);connect(b,&QPushButton::clicked,this,[this,callback]{if(this->*callback)(this->*callback)();});return b;};

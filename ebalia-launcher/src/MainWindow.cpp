@@ -4,6 +4,7 @@
 #include "TourMascot.hpp"
 #include "CommunityPage.hpp"
 #include "BedrockPage.hpp"
+#include "SkinManager.hpp"
 #include "PatreonAuth.hpp"
 #include "ModRepository.hpp"
 #include "Language.hpp"
@@ -111,7 +112,9 @@ QPushButton *button(const QString &label,QLayout *layout,std::function<void()> a
     auto caption=label;caption.replace("&","&&"); // Labels are literal text, not Qt keyboard mnemonics.
     auto b=new QPushButton(icon.isEmpty()||caption.isEmpty()?caption:" "+caption);b->setCursor(Qt::PointingHandCursor);if(primary)b->setProperty("play",true);
     if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,primary?QColor(Qt::white):QColor(225,225,230)));b->setIconSize(QSize(18,18));}
-    if(layout)layout->addWidget(b);QObject::connect(b,&QPushButton::clicked,owner,std::move(action));return b;
+    // Callers that connect the button themselves pass no action: an empty std::function would throw
+    // bad_function_call on click and close the launcher.
+    if(layout)layout->addWidget(b);if(action)QObject::connect(b,&QPushButton::clicked,owner,std::move(action));return b;
 }
 QLabel *label(const QString &value,QLayout *layout,const char *name="",bool wrap=true) {
     auto l=new QLabel(value);l->setObjectName(name);l->setWordWrap(wrap);l->setTextFormat(Qt::PlainText);if(layout)layout->addWidget(l);return l;
@@ -133,7 +136,7 @@ QVBoxLayout *settingsCard(QVBoxLayout *parent,const QString &icon,const QString 
 QString exception() {try{throw;}catch(const std::exception &e){return QString::fromUtf8(e.what());}catch(...){return "Unknown error";}}
 QString filename(QListWidget *list) {return list->currentItem()?list->currentItem()->data(Qt::UserRole).toString():QString();}
 QAction *menuAction(QMenu &menu,const QString &icon,const QString &label,QObject *context,std::function<void()> action) {
-    auto a=menu.addAction(icon.isEmpty()?QIcon():Ui::icon(icon),label);QObject::connect(a,&QAction::triggered,context,std::move(action));return a;
+    auto a=menu.addAction(icon.isEmpty()?QIcon():Ui::icon(icon),label);if(action)QObject::connect(a,&QAction::triggered,context,std::move(action));return a;
 }
 bool minecraftLink(const QUrl &url){return url.scheme()=="https"&&(url.host()=="minecraft.net"||url.host().endsWith(".minecraft.net"));}
 class ArchiveDelegate:public QStyledItemDelegate {
@@ -204,6 +207,7 @@ private:
 class ModCover:public QWidget {
 public:
     using QWidget::QWidget;
+    std::function<void()> clicked;
     void setImage(const QPixmap &image) {
         m_image=image;m_blur={};
         if(!image.isNull()){m_blur=image.scaled(qMax(1,image.width()/24),qMax(1,image.height()/24),Qt::IgnoreAspectRatio,Qt::SmoothTransformation);}
@@ -220,7 +224,40 @@ protected:
         p.drawPixmap(QPoint((width()-shown.width())/2,(height()-shown.height())/2),shown);
     }
 private:
+    void mousePressEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton&&clicked)clicked();}
     QPixmap m_image,m_blur;
+};
+// A mod's pictures, one at a time and as large as the window allows, with the previous / next buttons and arrow keys.
+class ModGallery:public QDialog {
+public:
+    ModGallery(const QString &title,const QStringList &urls,int start,std::function<void(const QString &,std::function<void(const QPixmap &)>)> fetch,QWidget *parent)
+        :QDialog(parent),m_urls(urls),m_index(start),m_fetch(std::move(fetch)) {
+        setObjectName("modGalleryViewer");setWindowTitle(title);resize(1000,640);
+        auto layout=new QVBoxLayout(this);layout->setContentsMargins(14,14,14,12);layout->setSpacing(10);
+        m_picture=new QLabel;m_picture->setAlignment(Qt::AlignCenter);m_picture->setMinimumSize(320,200);m_picture->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Ignored);layout->addWidget(m_picture,1);
+        auto row=new QHBoxLayout;layout->addLayout(row);
+        m_previous=new QPushButton("◀");m_previous->setObjectName("galleryPrevious");m_next=new QPushButton("▶");m_next->setObjectName("galleryNext");
+        m_counter=new QLabel;m_counter->setObjectName("muted");m_counter->setAlignment(Qt::AlignCenter);
+        row->addWidget(m_previous);row->addStretch();row->addWidget(m_counter);row->addStretch();row->addWidget(m_next);
+        connect(m_previous,&QPushButton::clicked,this,[this]{go(m_index-1);});connect(m_next,&QPushButton::clicked,this,[this]{go(m_index+1);});
+        go(m_index);
+    }
+    int index() const {return m_index;}
+protected:
+    void keyPressEvent(QKeyEvent *event) override {
+        if(event->key()==Qt::Key_Left)go(m_index-1);else if(event->key()==Qt::Key_Right)go(m_index+1);else QDialog::keyPressEvent(event);
+    }
+    void resizeEvent(QResizeEvent *event) override {QDialog::resizeEvent(event);fit();}
+private:
+    void go(int index) {
+        if(m_urls.isEmpty())return;m_index=(index+int(m_urls.size()))%int(m_urls.size());
+        m_counter->setText(QString("%1 / %2").arg(m_index+1).arg(m_urls.size()));m_previous->setEnabled(m_urls.size()>1);m_next->setEnabled(m_urls.size()>1);
+        m_image={};m_picture->setText("…");const int wanted=m_index;QPointer<ModGallery> self(this);
+        m_fetch(m_urls[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted){self->m_image=image;self->fit();}});
+    }
+    void fit() {if(!m_image.isNull())m_picture->setPixmap(m_image.scaled(m_picture->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation));}
+    QStringList m_urls;int m_index=0;QPixmap m_image;std::function<void(const QString &,std::function<void(const QPixmap &)>)> m_fetch;
+    QLabel *m_picture=nullptr,*m_counter=nullptr;QPushButton *m_previous=nullptr,*m_next=nullptr;
 };
 class WheelGuard:public QObject {
 public:
@@ -259,7 +296,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     if(!Language::available().contains(Language::current))Language::current="en";
     m_mc=new McInstanceManager(m_root,this);m_mc->nameFolders();
     // Instance icons with Minecraft's own textures once a game version was downloaded.
-    QTimer::singleShot(0,this,[this]{InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();});});
+    QTimer::singleShot(0,this,[this]{InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();refreshAvatars(true);});});
     // Instances of other launchers pasted into the instances folder become EBALIA instances, also while the launcher is open.
     {auto watcher=new QFileSystemWatcher({m_mc->instancesRoot()},this);m_pasteTimer=new QTimer(this);m_pasteTimer->setSingleShot(true);m_pasteTimer->setInterval(3000);
      connect(watcher,&QFileSystemWatcher::directoryChanged,m_pasteTimer,qOverload<>(&QTimer::start));connect(m_pasteTimer,&QTimer::timeout,this,[this]{adoptPastedInstances();});m_pasteTimer->start(1500);}m_versions=new VersionManager(this);m_versions->loadVersions();
@@ -270,11 +307,12 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_mc,&McInstanceManager::manifestReady,this,[this](const QList<McVersion> &v){m_manifest=v;m_catalog->setText(text("Catálogo actualizado · ","Catalog updated · ","Catálogo atualizado · ")+QString::number(v.size())+text(" versiones"," versions"," versões"));});
     connect(m_mc,&McInstanceManager::manifestFailed,this,[this](const QString &e){m_catalog->setText(Language::message(e));});
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
-    connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);if(ok)InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();});const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
+    connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);if(ok)InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();refreshAvatars(true);});const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
     connect(m_mc,&McInstanceManager::gameStarted,this,[this](const QString &){refreshInstances();m_status->setText(text("Minecraft en ejecución","Minecraft is running","Minecraft em execução"));});
     connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code)showCrash(dir);});
     connect(m_mc,&McInstanceManager::launchFailed,this,[this](const QString &,const QString &e){error(e);refreshInstances();});
     connect(m_accounts,&AccountManager::accountsChanged,this,&MainWindow::refreshAccounts);
+    connect(m_accounts,&AccountManager::accountsChanged,this,[this]{refreshAvatars();});QTimer::singleShot(0,this,[this]{refreshAvatars();});
     connect(m_java,&JavaRunner::processError,this,&MainWindow::error);
     connect(m_java,&JavaRunner::processStarted,this,[this]{m_status->setText(text("Versión perdida en ejecución","Lost version is running","Versão perdida em execução"));lostSelection();});
     connect(m_java,&JavaRunner::processFinished,this,[this]{lostSelection();m_status->setText(text("Todo listo","Ready","Tudo pronto"));});
@@ -402,6 +440,7 @@ QWidget *MainWindow::buildInstances() {
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
     m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
     m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));};
+    m_detail->download=[this](const QString &kind){auto i=selected();if(!i.dir.isEmpty())discover(kind,i.dir);};
     m_detail->openFolder=[this](const QString &folder){auto i=selected();if(i.dir.isEmpty())return;auto path=folder.isEmpty()?i.dir:i.dir+"/"+folder;QDir().mkpath(path);QDesktopServices::openUrl(QUrl::fromLocalFile(path));};
     auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_library);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
     return m_library;
@@ -413,10 +452,15 @@ void MainWindow::openCreatorDialog(bool patreonOnly){
 }
 QWidget *MainWindow::buildExplore() {
     auto s=section(k("Discover mods"),Language::key("Mods for your Minecraft version and loader. Select one or more mods."));auto l=s.layout;
-    auto filters=new QHBoxLayout;filters->setSpacing(10);l->addLayout(filters);
-    m_target=new QComboBox;m_target->setObjectName("modTarget");m_target->setMinimumWidth(240);filters->addWidget(m_target,1);connect(m_target,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_hits={};searchMods();});
-    m_modProvider=new QComboBox;m_modProvider->addItem(InstanceIcons::provider("modrinth"),"Modrinth","modrinth");m_modProvider->addItem(InstanceIcons::provider("curseforge"),"CurseForge","curseforge");m_modProvider->setMinimumWidth(170);filters->addWidget(m_modProvider);
+    // Instance, kind and store side by side; stacked in narrow windows.
+    auto filtersRow=new Ui::ResponsiveRow(860);l->addWidget(filtersRow);auto filters=filtersRow->box();filters->setSpacing(10);
+    m_target=new QComboBox;m_target->setObjectName("modTarget");m_target->setMinimumWidth(200);filters->addWidget(m_target,1);connect(m_target,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_hits={};searchMods();});
+    m_modProvider=new QComboBox;m_modProvider->addItem(InstanceIcons::provider("modrinth"),"Modrinth","modrinth");m_modProvider->addItem(InstanceIcons::provider("curseforge"),"CurseForge","curseforge");m_modProvider->setObjectName("modProvider");m_modProvider->setMinimumWidth(150);filters->addWidget(m_modProvider);
     connect(m_modProvider,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;searchMods();});
+    // What to look for: mods, resource packs or shaders, from either store.
+    m_modKind=new QComboBox;m_modKind->setObjectName("modKind");m_modKind->setMinimumWidth(150);filters->insertWidget(1,m_modKind);
+    m_modKind->addItem(Ui::icon("puzzle"),k("Mods"),"mod");m_modKind->addItem(Ui::icon("palette"),k("Resource packs"),"resourcepack");m_modKind->addItem(Ui::icon("sparkles"),k("Shader packs"),"shader");
+    connect(m_modKind,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;m_query->clear();searchMods();});
     auto search=new QHBoxLayout;search->setSpacing(10);l->addLayout(search);m_query=new QLineEdit;m_query->setObjectName("modQuery");m_query->setPlaceholderText("Sodium, Dynamic Lights, FallingTree, Veinminer…");m_query->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_query->setClearButtonEnabled(true);search->addWidget(m_query,1);
     button(text("Buscar","Search","Buscar"),search,[this]{searchMods();},this,true,"search");connect(m_query,&QLineEdit::returnPressed,this,[this]{searchMods();});
     m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);m_results->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -425,31 +469,51 @@ QWidget *MainWindow::buildExplore() {
     auto panel=new QFrame;panel->setObjectName("modPreview");panel->setStyleSheet("#modPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#modPreview QLabel{background:transparent;}");panel->setMinimumWidth(320);split->addWidget(panel);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
     auto pl=new QVBoxLayout(panel);pl->setContentsMargins(0,0,0,12);pl->setSpacing(10);
     auto cover=new ModCover;cover->setObjectName("modPreviewCover");cover->setFixedHeight(160);cover->hide();pl->addWidget(cover);
-    auto head=new QHBoxLayout;head->setContentsMargins(16,0,16,0);head->setSpacing(12);pl->addLayout(head);auto logo=new QLabel;logo->setFixedSize(56,56);head->addWidget(logo,0,Qt::AlignTop);
+    // Space above the icon and title, so they never touch the panel's edge when a mod has no picture.
+    auto head=new QHBoxLayout;head->setContentsMargins(16,14,16,0);head->setSpacing(12);pl->addLayout(head);auto logo=new QLabel;logo->setFixedSize(56,56);logo->setAlignment(Qt::AlignCenter);head->addWidget(logo,0,Qt::AlignVCenter);
     auto names=new QVBoxLayout;names->setSpacing(2);head->addLayout(names,1);auto title=label({},names,"sectionTitle");auto meta=label({},names,"muted");
+    // The mod's gallery: thumbnails that open the pictures large.
+    auto galleryRow=new QHBoxLayout;galleryRow->setContentsMargins(16,0,16,0);pl->addLayout(galleryRow);
+    auto gallery=new QListWidget;gallery->setObjectName("modGallery");gallery->setViewMode(QListView::IconMode);gallery->setFlow(QListView::LeftToRight);gallery->setWrapping(false);
+    gallery->setMovement(QListView::Static);gallery->setIconSize(QSize(128,72));gallery->setSpacing(4);gallery->setFixedHeight(98);gallery->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    gallery->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);gallery->setFrameShape(QFrame::NoFrame);gallery->setStyleSheet("QListWidget#modGallery{background:transparent;border:0;padding:0}QListWidget#modGallery::item{border-radius:6px;padding:2px}");gallery->setCursor(Qt::PointingHandCursor);gallery->hide();galleryRow->addWidget(gallery);
+    auto openGallery=[this,gallery,title](int start){QStringList urls;for(int n=0;n<gallery->count();++n)urls<<gallery->item(n)->data(Qt::UserRole).toString();if(urls.isEmpty())return;
+        ModGallery viewer(title->text(),urls,start,[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1920);},this);Ui::openWindow(viewer);};
+    connect(gallery,&QListWidget::itemClicked,this,[gallery,openGallery](QListWidgetItem *item){openGallery(gallery->row(item));});
+    cover->clicked=[openGallery]{openGallery(0);};
+    auto showGallery=[this,gallery](const QJsonArray &urls,const QString &id){
+        gallery->clear();gallery->setVisible(!urls.isEmpty());
+        for(const auto &v:urls){const auto url=v.toString();if(!url.startsWith("https://"))continue;auto item=new QListWidgetItem(gallery);item->setData(Qt::UserRole,url);item->setSizeHint(QSize(136,80));
+            loadImage(url,[this,gallery,url,id](const QPixmap &image){auto c=m_results->currentItem();if(!c||c->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id)return;
+                for(int n=0;n<gallery->count();++n)if(gallery->item(n)->data(Qt::UserRole).toString()==url)gallery->item(n)->setIcon(QIcon(Ui::cover(image,QSize(128,72),6)));},640);}
+        gallery->setVisible(gallery->count()>0);};
     auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1400);};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
     auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");
     auto page=button(text("Abrir página","Open page","Abrir página"),actions,{},this,false,"external-link");actions->addStretch();
-    connect(install,&QPushButton::clicked,this,[this]{if(auto item=m_results->currentItem())installModNow(item->data(Qt::UserRole).toJsonObject());});
+    connect(install,&QPushButton::clicked,this,[this]{QJsonArray projects;for(auto item:m_results->selectedItems())projects.append(item->data(Qt::UserRole).toJsonObject());
+        if(projects.isEmpty()&&m_results->currentItem())projects.append(m_results->currentItem()->data(Qt::UserRole).toJsonObject());if(!projects.isEmpty())installProjects(projects);});
+    // The only install button: it installs every selected entry (Ctrl or Shift to choose several) and says how many.
+    connect(m_results,&QListWidget::itemSelectionChanged,install,[this,install]{const auto n=m_results->selectedItems().size();
+        install->setText(" "+(n>1?text("Instalar (%1)","Install (%1)","Instalar (%1)").arg(n):text("Instalar","Install","Instalar")));});
     connect(page,&QPushButton::clicked,this,[page]{const QUrl url(page->property("url").toString());if(url.scheme()=="https")QDesktopServices::openUrl(url);});
-    connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page](QListWidgetItem *item){
+    connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page,showGallery](QListWidgetItem *item){
         // The panel never hides, so the list keeps its width and a double-click stays on the same mod.
-        if(!item){title->setText(text("Elegí un mod para ver su página.","Choose a mod to see its page.","Escolha um mod para ver a página dele."));meta->clear();logo->clear();cover->setImage({});bodyView->showPage({});return;}
+        if(!item){title->setText(text("Elegí un mod para ver su página.","Choose a mod to see its page.","Escolha um mod para ver a página dele."));meta->clear();logo->clear();cover->setImage({});bodyView->showPage({});showGallery({},{});return;}
         const auto p=item->data(Qt::UserRole).toJsonObject();const auto id=p["project_id"].toString();
         title->setText(p["title"].toString());const auto downloads=p["downloads"].toInteger();
         meta->setText(p["author"].toString()+(downloads>0?"  ·  "+QLocale(Language::current).toString(downloads)+" "+text("descargas","downloads","downloads"):QString()));
         logo->setPixmap(item->icon().pixmap(56,56));cover->setImage({});bodyView->showPage("<p>"+p["description"].toString().toHtmlEscaped()+"</p>");
-        page->setProperty("url",p["provider"].toString()=="curseforge"?p["website"].toString():"https://modrinth.com/mod/"+p["slug"].toString());
-        const auto gallery=p["gallery"].toArray();const auto art=!gallery.isEmpty()?gallery.first().toString():p["featured_gallery"].toString();
+        page->setProperty("url",p["provider"].toString()=="curseforge"?p["website"].toString():"https://modrinth.com/"+p["project_type"].toString("mod")+"/"+p["slug"].toString());
+        const auto gallery=p["gallery"].toArray();const auto art=!gallery.isEmpty()?gallery.first().toString():p["featured_gallery"].toString();showGallery(gallery,id);
         if(!art.isEmpty())loadImage(art,[cover,id,this](const QPixmap &image){if(auto current=m_results->currentItem();current&&current->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
         // The full description, fetched quietly.
         auto watcher=new QFutureWatcher<QJsonObject>(bodyView);auto root=m_root;
-        connect(watcher,&QFutureWatcher<QJsonObject>::finished,bodyView,[this,watcher,bodyView,cover,page,id]{
+        connect(watcher,&QFutureWatcher<QJsonObject>::finished,bodyView,[this,watcher,bodyView,cover,page,id,showGallery]{
             const auto d=watcher->result();watcher->deleteLater();auto current=m_results->currentItem();if(!current||current->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id||d.isEmpty())return;
             const auto body=d["body"].toString();if(!body.isEmpty())bodyView->showPage(body);
             if(!d["url"].toString().isEmpty())page->setProperty("url",d["url"].toString());
-            const auto gallery=d["gallery"].toArray();if(cover->isHidden()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
+            const auto gallery=d["gallery"].toArray();if(!gallery.isEmpty())showGallery(gallery,id);if(cover->isHidden()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
         });
         watcher->setFuture(QtConcurrent::run([root,id]{try{return ModRepository(root).details(id);}catch(...){return QJsonObject{};}}));
     });
@@ -457,9 +521,6 @@ QWidget *MainWindow::buildExplore() {
     connect(m_results->model(),&QAbstractItemModel::dataChanged,logo,[this,logo](const QModelIndex &from,const QModelIndex &to){if(auto c=m_results->currentItem();c&&m_results->row(c)>=from.row()&&m_results->row(c)<=to.row())logo->setPixmap(c->icon().pixmap(56,56));});
     // Double-click installs the mod (with its dependencies) right away.
     connect(m_results,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){installModNow(item->data(Qt::UserRole).toJsonObject());});
-    auto browseRow=new Ui::ResponsiveRow(720);l->addWidget(browseRow);auto browse=browseRow->box();browse->setSpacing(10);
-    button(text("Ver instalación y dependencias","Preview installation & dependencies","Ver instalação e dependências"),browse,[this]{QJsonArray projects;for(auto item:m_results->selectedItems()){auto p=item->data(Qt::UserRole).toJsonObject();projects.append(QJsonObject{{"project_id",p["project_id"]},{"name",p["title"]}});}if(!projects.isEmpty())preview(projects,m_target->currentData().toString());},this,true,"download");
-    browse->addStretch();
     // Like Prism Launcher: reaching the end of the list loads the next results.
     connect(m_results->verticalScrollBar(),&QScrollBar::valueChanged,this,[this](int value){
         auto bar=m_results->verticalScrollBar();
@@ -765,7 +826,7 @@ void MainWindow::refreshAccounts(){
     if(m_playerName){m_playerName->setText(none?k("No account"):active.name);m_playerType->setText(none?k("Local profile"):type(active));}
     if(m_playerAvatar)m_playerAvatar->setPixmap(none?Ui::avatar(QString(),44):m_accounts->picture(active,44));
     if(m_accountList){
-        m_accountList->clear();for(const auto &a:m_accounts->accounts()){auto item=new QListWidgetItem(QIcon(m_accounts->picture(a,30)),a.name+"\n"+type(a),m_accountList);item->setData(Qt::UserRole,a.uuid);if(a.uuid==active.uuid)m_accountList->setCurrentItem(item);}
+        m_accountList->clear();for(const auto &a:m_accounts->accounts()){QIcon face(m_accounts->picture(a,30));face.addPixmap(m_accounts->picture(a,30),QIcon::Selected);auto item=new QListWidgetItem(face,a.name+"\n"+type(a),m_accountList);item->setData(Qt::UserRole,a.uuid);if(a.uuid==active.uuid)m_accountList->setCurrentItem(item);}
         if(!m_accountList->count()){auto item=new QListWidgetItem(QIcon(Ui::avatar({},30)),k("No account"),m_accountList);item->setFlags(Qt::ItemIsEnabled);}
         m_accountList->setFixedHeight(qMin(m_accountList->count(),3)*62+16);
     }
@@ -807,7 +868,7 @@ void MainWindow::refreshInstances(){
         QJsonObject meta;try{meta=ModRepository::read(i.dir+"/instance.json");}catch(...){}
         InstanceInfo info{i,meta["group"].toString().trimmed(),meta["icon"].toString(),meta["loaderVersion"].toString(),!meta["packProvider"].toString().isEmpty(),m_mc->isRunning(i.dir),m_installing.contains(i.dir)||m_mc->isInstalling(i.dir)};
         infos<<info;used<<info.group;if(i.dir==m_selectedDir)current=info;
-        if(i.loader!="vanilla")m_target->addItem(InstanceIcons::icon(info.icon,i.dir),i.name+"  ·  "+InstanceText::loader(i.loader)+" "+i.mcVersion,i.dir);
+        m_target->addItem(InstanceIcons::icon(info.icon,i.dir),i.name+"  ·  "+InstanceText::loader(i.loader)+" "+i.mcVersion,i.dir); // vanilla too: resource packs need no loader
     }
     QStringList emptyGroups;for(const auto &g:QSettings().value("ui/groups").toStringList())if(!used.contains(g))emptyGroups<<g;
     m_grid->setInstances(infos,emptyGroups,m_selectedDir);
@@ -1226,8 +1287,12 @@ void MainWindow::searchMods(int offset){
     // Another background task is running (an install, an import): search as soon as it ends instead of ignoring Enter.
     if(m_jobs){QTimer::singleShot(400,this,[this,offset]{searchMods(offset);});return;}
     auto dir=m_target->currentData().toString();if(dir.isEmpty()){error(text("Creá una instancia con cargador de mods primero.","Create an instance with a mod loader first.","Crie uma instância com carregador de mods primeiro."));return;}
-    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}auto root=m_root,query=m_query->text(),provider=m_modProvider->currentData().toString();
-    auto job=[root,query,info,offset,provider]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider)}};};
+    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}auto root=m_root,query=m_query->text(),provider=m_modProvider->currentData().toString(),kind=m_modKind->currentData().toString();
+    // Mods need a loader: in a vanilla instance the list explains it instead of showing an error window.
+    if(kind!="resourcepack"&&info["loader"].toString()=="vanilla"){
+        if(offset==0){m_results->clear();auto note=new QListWidgetItem(Ui::icon("compass",dim),text("Esta instancia no tiene cargador de mods. Elegí una con Fabric, Quilt, Forge o NeoForge, o buscá paquetes de recursos.","This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.","Esta instância não tem carregador de mods. Escolha uma com Fabric, Quilt, Forge ou NeoForge, ou procure pacotes de recursos."),m_results);note->setFlags(Qt::ItemIsEnabled);m_results->setProperty("lastPage",true);}
+        return;}
+    auto job=[root,query,info,offset,provider,kind]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider,kind)}};};
     auto show=[this,offset](QJsonObject r){
         m_offset=offset;if(offset==0)m_results->clear();auto hits=r["hits"].toArray();m_results->setProperty("lastPage",hits.size()<30);
         for(const auto &v:hits){
@@ -1244,19 +1309,70 @@ void MainWindow::searchMods(int offset){
     connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,show]{auto r=watcher->result();watcher->deleteLater();m_results->setProperty("loadingMore",false);if(!r.contains("error"))show(r);});
     watcher->setFuture(QtConcurrent::run([job]{try{return job();}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));
 }
-void MainWindow::installModNow(const QJsonObject &project){
-    const auto dir=m_target->currentData().toString();if(dir.isEmpty())return;
+void MainWindow::refreshAvatars(bool force){
+    QList<McAccount> pending;for(const auto &a:m_accounts->accounts())if(force||!m_avatarsDone.contains(a.uuid)){pending<<a;m_avatarsDone.insert(a.uuid);}
+    if(pending.isEmpty())return;
+    auto root=m_root;auto watcher=new QFutureWatcher<QMap<QString,QImage>>(this);
+    connect(watcher,&QFutureWatcher<QMap<QString,QImage>>::finished,this,[this,watcher]{const auto heads=watcher->result();watcher->deleteLater();for(auto it=heads.begin();it!=heads.end();++it)m_accounts->setSkinHead(it.key(),it.value());});
+    watcher->setFuture(QtConcurrent::run([root,pending]{
+        QMap<QString,QImage> heads;
+        for(const auto &a:pending){
+            QImage skin;
+            if(a.type=="msa"){const auto file=root+"/mc/cache/skins/"+QString(a.uuid).remove('-')+".png";SkinManager::fetchProfileSkin(a.uuid,file);skin.load(file);}
+            else skin=SkinManager::defaultSkin(root,a.uuid);
+            if(const auto head=SkinManager::head(skin);!head.isNull())heads.insert(a.uuid,head);
+        }
+        return heads;}));
+}
+void MainWindow::discover(const QString &kind,const QString &dir){
+    // Opening the page searches by itself when the list is empty.
+    const int at=m_modKind->findData(kind);if(at>=0)m_modKind->setCurrentIndex(at);
+    if(const int target=m_target->findData(dir);!dir.isEmpty()&&target>=0)m_target->setCurrentIndex(target);
+    m_query->clear();m_results->clear();m_offset=0;
+    if(m_pages->currentIndex()==Explore)searchMods();else showPage(Explore);
+}
+void MainWindow::installModNow(const QJsonObject &project){installProjects(QJsonArray{project});}
+void MainWindow::installProjects(const QJsonArray &projects,QString kind){
+    const auto dir=m_target->currentData().toString();if(dir.isEmpty()||projects.isEmpty())return;
+    if(kind.isEmpty())kind=m_modKind?m_modKind->currentData().toString():QString("mod");
+    QStringList titles;for(const auto &v:projects)titles<<v.toObject()["title"].toString();
+    const auto label=titles.size()==1?titles.first():text("%1 proyectos","%1 projects","%1 projetos").arg(titles.size());
     // Another task (such as loading the list) is still running: the install starts right after it.
-    if(m_jobs){m_status->setText(text("%1 se instalará al terminar la tarea actual.","%1 will install when the current task ends.","%1 será instalado ao terminar a tarefa atual.").arg(project["title"].toString()));QTimer::singleShot(400,this,[this,project]{installModNow(project);});return;}
+    if(m_jobs){m_status->setText(text("%1 se instalará al terminar la tarea actual.","%1 will install when the current task ends.","%1 será instalado ao terminar a tarefa atual.").arg(label));QTimer::singleShot(400,this,[this,projects,kind]{installProjects(projects,kind);});return;}
     if(m_mc->isRunning(dir)||m_installing.contains(dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}
-    QJsonArray installed;if(QFile::exists(dir+"/mods.json")){try{for(const auto &v:ModRepository::read(dir+"/mods.json")["mods"].toArray())if(QFile::exists(dir+"/mods/"+v.toObject()["filename"].toString()))installed.append(v);}catch(...){}}
-    auto root=m_root;const auto name=project["title"].toString();
-    work(text("Instalando %1…","Installing %1…","Instalando %1…").arg(name),[root,dir,info,project,installed]{
-        ModRepository repo(root);auto plan=repo.plan(QJsonArray{QJsonObject{{"project_id",project["project_id"]},{"name",project["title"]}}},info["mcVersion"].toString(),info["loader"].toString(),installed);
-        const auto missing=plan["missing"].toArray();if(!missing.isEmpty())throw std::runtime_error(missing.first().toObject()["reason"].toString().toStdString());
-        repo.apply(dir,plan);return QJsonObject{{"count",plan["versions"].toArray().size()}};
-    },[this,name](QJsonObject r){refreshInstances();m_status->setText(text("%1 instalado (%2 archivos con sus dependencias).","%1 installed (%2 files with its dependencies).","%1 instalado (%2 arquivos com dependências).").arg(name).arg(r["count"].toInt()));});
+    auto root=m_root;const auto game=info["mcVersion"].toString(),loader=info["loader"].toString();
+    if(kind=="mod"){
+        QJsonArray installed;if(QFile::exists(dir+"/mods.json")){try{for(const auto &v:ModRepository::read(dir+"/mods.json")["mods"].toArray())if(QFile::exists(dir+"/mods/"+v.toObject()["filename"].toString()))installed.append(v);}catch(...){}}
+        work(text("Instalando %1…","Installing %1…","Instalando %1…").arg(label),[root,dir,game,loader,projects,installed]{
+            QJsonArray wanted;for(const auto &v:projects)wanted.append(QJsonObject{{"project_id",v.toObject()["project_id"]},{"name",v.toObject()["title"]}});
+            ModRepository repo(root);auto plan=repo.plan(wanted,game,loader,installed);
+            const auto missing=plan["missing"].toArray();
+            if(plan["versions"].toArray().isEmpty()&&!missing.isEmpty())throw std::runtime_error(missing.first().toObject()["reason"].toString().toStdString());
+            repo.apply(dir,plan);return QJsonObject{{"count",plan["versions"].toArray().size()},{"missing",missing}};
+        },[this,label](QJsonObject r){
+            refreshInstances();const int count=r["count"].toInt();
+            m_status->setText(count<=1?text("%1 instalado.","%1 installed.","%1 instalado.").arg(label):text("%1 instalado (%2 archivos con sus dependencias).","%1 installed (%2 files with its dependencies).","%1 instalado (%2 arquivos com dependências).").arg(label).arg(count));
+            // Some of several mods had no version for this game: the others are installed, these are listed.
+            if(const auto missing=r["missing"].toArray();!missing.isEmpty()){QStringList lines;for(const auto &m:missing)lines<<"• "+m.toObject()["name"].toString()+": "+Language::message(m.toObject()["reason"].toString());
+                error(text("Estos no se pudieron instalar:","These could not be installed:","Estes não puderam ser instalados:")+"\n"+lines.join("\n"));}
+        });
+        return;
+    }
+    // Resource packs and shaders: the newest file for this game version, in resourcepacks/ or shaderpacks/.
+    work(text("Instalando %1…","Installing %1…","Instalando %1…").arg(label),[root,dir,game,projects,kind]{
+        ModRepository repo(root);QJsonArray files;for(const auto &v:projects)files.append(repo.installPack(dir,v.toObject()["project_id"].toString(),game,kind)["filename"]);
+        return QJsonObject{{"files",files}};
+    },[this,label,kind,dir,loader](QJsonObject){
+        refreshInstances();
+        if(kind!="shader"){m_status->setText(text("%1 instalado. Activalo en el juego: Opciones › Paquetes de recursos.","%1 installed. Turn it on in the game: Options › Resource Packs.","%1 instalado. Ative no jogo: Opções › Pacotes de recursos.").arg(label));return;}
+        m_status->setText(text("%1 instalado. Elegilo en el juego: Opciones › Video › Shaders.","%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.","%1 instalado. Escolha no jogo: Opções › Vídeo › Shaders.").arg(label));
+        // Shaders need Iris (Fabric, Quilt, NeoForge) or Oculus (Forge): offer it when the instance has neither.
+        for(const auto &jar:QDir(dir+"/mods").entryList({"*.jar"},QDir::Files))if(jar.contains("iris",Qt::CaseInsensitive)||jar.contains("oculus",Qt::CaseInsensitive))return;
+        const bool forge=loader=="forge";const QString name=forge?"Oculus":"Iris Shaders";
+        if(QMessageBox::question(this,"EBALIA",text("Los shaders necesitan %1 para funcionar en esta instancia. ¿Instalarlo ahora?","Shaders need %1 to work in this instance. Install it now?","Os shaders precisam do %1 para funcionar nesta instância. Instalar agora?").arg(name))!=QMessageBox::Yes)return;
+        installProjects(QJsonArray{QJsonObject{{"project_id",forge?"GchcoXML":"YL57xq9U"},{"title",name}}},"mod");
+    });
 }
 void MainWindow::account(bool microsoft){
     if(!microsoft){bool ok;const QString suggestion="Player";

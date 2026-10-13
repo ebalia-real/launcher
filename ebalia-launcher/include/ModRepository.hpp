@@ -10,8 +10,13 @@ class ModRepository {
 public:
     using Transport = std::function<QByteArray(const QUrl &)>;
     explicit ModRepository(QString root, Transport transport = {});
-    QJsonArray search(const QString &query, const QString &game, const QString &loader, int offset = 0, const QString &provider = "modrinth");
+    // kind: "mod", "resourcepack" or "shader". Mods need the instance's loader; packs only its game version.
+    QJsonArray search(const QString &query, const QString &game, const QString &loader, int offset = 0, const QString &provider = "modrinth",
+                      const QString &kind = "mod");
     QJsonObject details(const QString &projectId);
+    // A resource pack or shader pack for this game version, verified and saved in the instance's resourcepacks/ or
+    // shaderpacks/ folder. Returns {"filename", "title"}.
+    QJsonObject installPack(const QString &instance, const QString &projectId, const QString &game, const QString &kind);
     QJsonObject plan(const QJsonArray &projects, const QString &game, const QString &loader, const QJsonArray &installed = {});
     void apply(const QString &instance, const QJsonObject &plan);
     QJsonObject capture(const QString &instance, const QString &name);

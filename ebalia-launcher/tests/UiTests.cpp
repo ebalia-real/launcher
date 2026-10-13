@@ -473,6 +473,75 @@ private slots:
             }
         }
     }
+    void exploreInstallButton(){
+        // The Install button of the mod page installs the mod with its dependencies and the launcher keeps running.
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        QString dir;{McInstanceManager setup(data.path());dir=setup.createInstance("Mods","1.21.1","fabric");}
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Explore);
+        auto results=window.findChild<QListWidget*>("modResults");QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);
+        const auto wanted=qEnvironmentVariable("EBALIA_TEST_MOD","Sodium");int row=0;
+        for(int n=0;n<results->count();++n)if(results->item(n)->text().startsWith(wanted)){row=n;break;}
+        results->setCurrentRow(row);QTest::qWait(1500);
+        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w);d&&d->isVisible()){qInfo()<<"dialog"<<d->windowTitle()<<(qobject_cast<QMessageBox*>(d)?qobject_cast<QMessageBox*>(d)->text():QString());d->reject();}});closer->start(100);
+        window.findChild<QPushButton*>("modPreviewInstall")->click();
+        QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QWidget*>("backgroundTaskProgress"),5000);
+        QTRY_VERIFY_WITH_TIMEOUT(!window.findChild<QWidget*>("backgroundTaskProgress"),120000);
+        qInfo()<<"status"<<window.findChild<QLabel*>("statusText")->text()<<"mods"<<QDir(dir+"/mods").entryList(QDir::Files);
+        QVERIFY(!QDir(dir+"/mods").entryList({"*.jar"},QDir::Files).isEmpty());
+    }
+    void exploreKindsAndGallery(){
+        // Resource packs and shaders from the stores into their folders; the gallery viewer of a mod.
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        QString dir;{McInstanceManager setup(data.path());dir=setup.createInstance("Packs","1.21.1","fabric");}
+        MainWindow window;window.resize(1400,900);window.show();window.showPage(MainWindow::Explore);
+        const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");
+        auto results=window.findChild<QListWidget*>("modResults");auto kind=window.findChild<QComboBox*>("modKind");auto provider=window.findChild<QComboBox*>("modProvider")?window.findChild<QComboBox*>("modProvider"):[&]{for(auto c:window.findChildren<QComboBox*>())if(c->findData("curseforge")>=0)return c;return (QComboBox*)nullptr;}();QVERIFY(kind);
+        QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);
+        // A mod without a banner picture (Bug #1) and a mod with a gallery.
+        for(int n=0;n<results->count();++n)if(results->item(n)->text().startsWith("Fabric API")){results->setCurrentRow(n);break;}
+        QTest::qWait(4000);if(!out.isEmpty())window.findChild<QWidget*>("modPreview")->grab().save(out+"/no-banner.png");
+        auto gallery=window.findChild<QListWidget*>("modGallery");int withGallery=-1;
+        for(int n=0;n<results->count()&&withGallery<0;++n){results->setCurrentRow(n);QTest::qWait(2500);if(gallery->count()>1)withGallery=n;}
+        QVERIFY2(withGallery>=0,"no mod with a gallery among the results");qInfo()<<"gallery of"<<results->item(withGallery)->text().section('\n',0,0)<<gallery->count();
+        if(!out.isEmpty())window.findChild<QWidget*>("modPreview")->grab().save(out+"/gallery-strip.png");
+        bool viewer=false;QTimer::singleShot(2500,&window,[&]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w);d&&d->objectName()=="modGalleryViewer"){viewer=true;
+            QTest::keyClick(d,Qt::Key_Right);QTest::qWait(2500);if(!out.isEmpty())d->grab().save(out+"/gallery-viewer.png");d->reject();}});
+        emit gallery->itemClicked(gallery->item(0));QVERIFY(viewer);
+        // Packs: Modrinth resource pack and shader, then CurseForge resource packs.
+        auto closer=new QTimer(&window);connect(closer,&QTimer::timeout,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QMessageBox*>(w);d&&d->isVisible()){qInfo()<<"asked:"<<d->text();d->reject();}});closer->start(100);
+        for(const auto &[type,folder]:QList<std::pair<QString,QString>>{{"resourcepack","resourcepacks"},{"shader","shaderpacks"}}){
+            kind->setCurrentIndex(kind->findData(type));emit kind->activated(kind->currentIndex());
+            QTRY_VERIFY_WITH_TIMEOUT(results->count()>0&&!window.findChild<QWidget*>("backgroundTaskProgress"),30000);
+            qInfo()<<type<<"first:"<<results->item(0)->text().section('\n',0,0);
+            results->setCurrentRow(0);QTest::qWait(500);window.findChild<QPushButton*>("modPreviewInstall")->click();
+            QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QWidget*>("backgroundTaskProgress"),5000);
+            QTRY_VERIFY_WITH_TIMEOUT(!window.findChild<QWidget*>("backgroundTaskProgress"),180000);
+            qInfo()<<folder<<QDir(dir+"/"+folder).entryList(QDir::Files)<<window.findChild<QLabel*>("statusText")->text();
+            QVERIFY(!QDir(dir+"/"+folder).entryList(QDir::Files).isEmpty());
+        }
+        if(!ModRepository::curseForgeKey().isEmpty()){
+            provider->setCurrentIndex(provider->findData("curseforge"));kind->setCurrentIndex(kind->findData("resourcepack"));emit kind->activated(kind->currentIndex());
+            QTRY_VERIFY_WITH_TIMEOUT(results->count()>0&&!window.findChild<QWidget*>("backgroundTaskProgress"),30000);
+            qInfo()<<"curseforge resource pack:"<<results->item(0)->text().section('\n',0,0);
+        }
+    }
+    void skinHeads(){
+        // Account pictures become skin heads: Microsoft (a public profile) and a profile without premium (default skin
+        // from a downloaded game, EBALIA_TEST_VERSIONS); the Skins list shows the head next to each skin.
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qunsetenv("EBALIA_NO_NETWORK");auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");qputenv("EBALIA_NO_NETWORK","1");});
+        QDir().mkpath(data.path()+"/mc");if(const auto versions=qEnvironmentVariable("EBALIA_TEST_VERSIONS");!versions.isEmpty())QFile::link(versions,data.path()+"/mc/versions");
+        {AccountManager accounts(data.path()+"/mc");accounts.addAccount({"msa","Notch","069a79f4-44e9-4726-a5be-fca90e38aaf5","x","y"});accounts.addAccount({"offline","Glitchy","3f9c1d2e-8a7b-4c6d-9e0f-1a2b3c4d5e6f",{},{}});}
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Skins);
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(data.path()+"/mc/avatars/069a79f4-44e9-4726-a5be-fca90e38aaf5-skin.png"),20000);
+        if(!qEnvironmentVariable("EBALIA_TEST_VERSIONS").isEmpty())QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(data.path()+"/mc/avatars/3f9c1d2e-8a7b-4c6d-9e0f-1a2b3c4d5e6f-skin.png"),20000);
+        QTest::qWait(1500);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){window.grab().save(out+"/skins-heads.png");
+            auto list=window.findChild<QListWidget*>("accountList");if(list)list->grab().save(out+"/account-list.png");}
+        QVERIFY(!window.findChild<QListWidget*>("skinList")->item(0)->icon().isNull());
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

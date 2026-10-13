@@ -1,5 +1,9 @@
 #include "SkinManager.hpp"
 #include "ModRepository.hpp"
+#include "Archive.hpp"
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QUrl>
 #include <QImageReader>
 #include <QPainter>
 #include <QFile>
@@ -109,3 +113,40 @@ void SkinManager::applyLocal(const QString &file,const QString &variant,const QS
 
 }
 void SkinManager::removeLocal(const QString &instance){save(instance+"/options.txt",optionsWith(options(instance),false));}
+
+QImage SkinManager::head(const QImage &skin){
+    if(skin.isNull()||skin.width()<64||skin.height()<32)return {};
+    const int scale=skin.width()/64;
+    QImage face=skin.copy(8*scale,8*scale,8*scale,8*scale).convertToFormat(QImage::Format_ARGB32);
+    // The hat layer sits over the face; some old skins fill it with an opaque colour, which Minecraft ignores too.
+    const QImage hat=skin.copy(40*scale,8*scale,8*scale,8*scale).convertToFormat(QImage::Format_ARGB32);
+    bool transparent=false;for(int y=0;y<hat.height()&&!transparent;++y)for(int x=0;x<hat.width();++x)if(qAlpha(hat.pixel(x,y))<255){transparent=true;break;}
+    if(transparent){QPainter p(&face);p.drawImage(0,0,hat);}
+    return face;
+}
+QString SkinManager::fetchProfileSkin(const QString &uuid,const QString &file){
+    QString variant="classic";
+    try{const auto profile=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://sessionserver.mojang.com/session/minecraft/profile/"+QString(uuid).remove('-')))).object();
+        for(const auto &p:profile["properties"].toArray()){if(p.toObject()["name"]!="textures")continue;
+            const auto textures=QJsonDocument::fromJson(QByteArray::fromBase64(p.toObject()["value"].toString().toLatin1())).object()["textures"].toObject()["SKIN"].toObject();
+            const QUrl url(textures["url"].toString());if(textures["metadata"].toObject()["model"].toString()=="slim")variant="slim";
+            if(url.isValid()&&url.host()=="textures.minecraft.net"){QImage image;if(image.loadFromData(ModRepository::fetch(QUrl("https://textures.minecraft.net"+url.path())))){QDir().mkpath(QFileInfo(file).absolutePath());image.save(file,"PNG");}}}
+    }catch(...){} // offline: the last skin seen stays
+    return variant;
+}
+QImage SkinManager::defaultSkin(const QString &root,const QString &uuid,bool *slim,QString *name){
+    const auto hex=QString(uuid).remove('-');if(hex.size()!=32)return {};
+    // DefaultPlayerSkin: floorMod(uuid.hashCode(), 18), slim skins first.
+    const quint64 most=hex.left(16).toULongLong(nullptr,16),least=hex.mid(16).toULongLong(nullptr,16),hilo=most^least;
+    const qint32 hash=qint32(quint32(hilo>>32)^quint32(hilo&0xffffffffu));const int index=((hash%18)+18)%18;
+    static const char *names[]{"alex","ari","efe","kai","makena","noor","steve","sunny","zuri"};
+    const bool isSlim=index<9;const QString skin=names[index%9];
+    if(slim)*slim=isSlim;if(name)*name=skin;
+    QString jar;QDateTime newest;
+    for(const auto &v:QDir(root+"/mc/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot)){const QFileInfo f(v.filePath()+"/"+v.fileName()+".jar");if(f.exists()&&f.size()>1000000&&(jar.isEmpty()||f.lastModified()>newest)){jar=f.filePath();newest=f.lastModified();}}
+    if(jar.isEmpty())return {};
+    QImage image;
+    try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/player/"+QString(isSlim?"slim/":"wide/")+skin+".png",1024*1024),"PNG");}catch(...){}
+    if(image.isNull())try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/entity/steve.png",1024*1024),"PNG");}catch(...){} // versions before 1.19.3
+    return image;
+}

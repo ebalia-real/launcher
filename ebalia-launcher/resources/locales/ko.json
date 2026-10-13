@@ -994,5 +994,15 @@
   "Opening Bedrock…": "Bedrock 여는 중…",
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "Bedrock 실행 중… Minecraft Linux가 Google 자격 증명 승인을 요청하면 그 창에서 승인하세요.",
   "Close Minecraft Linux first.": "먼저 Minecraft Linux를 닫으세요.",
-  "Close Minecraft Linux before playing from EBALIA.": "EBALIA에서 플레이하기 전에 Minecraft Linux를 닫으세요."
+  "Close Minecraft Linux before playing from EBALIA.": "EBALIA에서 플레이하기 전에 Minecraft Linux를 닫으세요.",
+  "DOWNLOAD": "다운로드",
+  "Install (%1)": "설치 (%1)",
+  "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "이 인스턴스에는 모드 로더가 없습니다. Fabric, Quilt, Forge, NeoForge 인스턴스를 선택하거나 리소스 팩을 찾아보세요.",
+  "%1 projects": "프로젝트 %1개",
+  "%1 installed.": "%1 설치됨.",
+  "These could not be installed:": "다음은 설치하지 못했습니다:",
+  "%1 installed. Turn it on in the game: Options › Resource Packs.": "%1 설치됨. 게임에서 켜세요: 설정 › 리소스 팩.",
+  "%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.": "%1 설치됨. 게임에서 선택하세요: 설정 › 비디오 설정 › 셰이더 팩.",
+  "Shaders need %1 to work in this instance. Install it now?": "이 인스턴스에서 셰이더를 쓰려면 %1이(가) 필요합니다. 지금 설치할까요?",
+  "%1 has no version for Minecraft %2.": "%1에는 Minecraft %2용 버전이 없습니다."
 }

@@ -994,5 +994,15 @@
   "Opening Bedrock…": "Abrindo o Bedrock…",
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "O Bedrock está abrindo… Se o Minecraft Linux pedir para aprovar suas credenciais do Google, aceite na janela dele.",
   "Close Minecraft Linux first.": "Feche o Minecraft Linux primeiro.",
-  "Close Minecraft Linux before playing from EBALIA.": "Feche o Minecraft Linux antes de jogar pelo EBALIA."
+  "Close Minecraft Linux before playing from EBALIA.": "Feche o Minecraft Linux antes de jogar pelo EBALIA.",
+  "DOWNLOAD": "BAIXAR",
+  "Install (%1)": "Instalar (%1)",
+  "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "Esta instância não tem carregador de mods. Escolha uma com Fabric, Quilt, Forge ou NeoForge, ou procure pacotes de recursos.",
+  "%1 projects": "%1 projetos",
+  "%1 installed.": "%1 instalado.",
+  "These could not be installed:": "Estes não puderam ser instalados:",
+  "%1 installed. Turn it on in the game: Options › Resource Packs.": "%1 instalado. Ative no jogo: Opções › Pacotes de recursos.",
+  "%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.": "%1 instalado. Escolha no jogo: Opções › Vídeo › Shaders.",
+  "Shaders need %1 to work in this instance. Install it now?": "Os shaders precisam do %1 para funcionar nesta instância. Instalar agora?",
+  "%1 has no version for Minecraft %2.": "%1 não tem uma versão para o Minecraft %2."
 }
