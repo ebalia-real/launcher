@@ -5,6 +5,8 @@ class QLabel;
 class QPushButton;
 class QProgressBar;
 class QFrame;
+class QTimer;
+class QToolButton;
 class TourMascot;
 class GuidedTour:public QWidget {
 public:
@@ -17,8 +19,14 @@ private:
  void display();
  void place();
  void finish();
+ // The step's text appears letter by letter while Silence talks, as in a game dialogue.
+ void type();
+ void showTyped();
  std::function<void(int)> m_navigate;
- int m_step=0;
+ int m_step=0,m_lastStep=-1,m_typed=0,m_pause=0,m_letters=0;
+ QString m_text;
+ QTimer *m_typing=nullptr;
+ QToolButton *m_sound=nullptr;
  bool m_finished=false;
  QFrame *m_card=nullptr;
  TourMascot *m_mascot=nullptr;

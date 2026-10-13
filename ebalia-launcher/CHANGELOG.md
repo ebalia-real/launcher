@@ -22,6 +22,15 @@
 - On GNOME and other Wayland desktops that leave the title bar to the app, EBALIA draws its own: double-click it to
   maximize or restore, drag it to move the window, and resize from the edges. Windows, macOS, X11, KDE and the rest
   keep the system's title bar, where double-click already does this. EBALIA_TITLE_BAR=system or custom forces either.
+- Skins can be deleted from the library (Delete skin, or the Delete key); the PNG they were imported from stays.
+- Guide & tutorial: the guide's steps are cards side by side, all in view without scrolling, and the questions and
+  answers have their own tab.
+- Silence talks in the interactive tour: the text appears letter by letter with little voice blips, a chime marks
+  each step and a short tune the end. The speaker button on the tour mutes it (remembered). The sounds are made by the
+  launcher itself and play through the system (PlaySound on Windows, system sounds on macOS, PulseAudio or PipeWire on
+  Linux): no sound files and no new libraries.
+- Translations: the note on the default skin of profiles without premium was in English in seven languages; the tour
+  now names Lost versions as the sidebar does in each language; the title bar's tooltips follow a change of language.
 
 # 1.1.7
 

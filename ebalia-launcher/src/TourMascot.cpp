@@ -1,4 +1,5 @@
 #include "TourMascot.hpp"
+#include "Sound.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -33,7 +34,11 @@ void TourMascot::lookAt(QPoint target) {
 }
 void TourMascot::showEvent(QShowEvent *event){m_shown=m_clock.elapsed();m_frame.start();QWidget::showEvent(event);}
 void TourMascot::hideEvent(QHideEvent *event){m_frame.stop();QWidget::hideEvent(event);}
-void TourMascot::mousePressEvent(QMouseEvent *event){react();event->accept();}
+// A click makes Silence hop and say something short.
+void TourMascot::mousePressEvent(QMouseEvent *event){
+ react();talk(380);event->accept();
+ for(int n=0;n<4;++n)QTimer::singleShot(n*85,this,[n]{Sound::play(Sound::Blip,(n*3+1)%4);});
+}
 void TourMascot::paintEvent(QPaintEvent *) {
  if(m_sheet.isNull())return;
  QPainter p(this);p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform);
@@ -49,7 +54,7 @@ void TourMascot::paintEvent(QPaintEvent *) {
  // Frame: blink now and then, move the jaw for a moment after each reaction.
  const double cycle=std::fmod(t,4.2);
  const bool blink=cycle<0.13||(int(t/4.2)%3==2&&cycle>0.26&&cycle<0.38);
- const bool talking=h>=0.1&&h<1.5&&int((h-0.1)/0.11)%2==0;
+ const bool talking=(h>=0.1&&h<1.5&&int((h-0.1)/0.11)%2==0)||(now<m_talkUntil&&(now/110)%2==0);
  const int mood=qBound(0,int(m_mood),MoodCount-1);
  const int frame=mood*3+(blink?2:talking?1:0);
  const QRect source(frame*frameWidth*upscale,0,frameWidth*upscale,frameHeight*upscale);

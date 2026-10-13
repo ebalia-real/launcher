@@ -12,6 +12,8 @@ public:
     // Puts the bar on window when this desktop needs it; EBALIA_TITLE_BAR=system or custom forces either one.
     static bool install(QMainWindow *window);
     explicit TitleBar(QMainWindow *window);
+    // The buttons' tooltips in the launcher's current language.
+    void retranslate();
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -21,5 +23,5 @@ protected:
 private:
     void toggleMaximized();
     void sync();
-    QMainWindow *m_window;QLabel *m_title;QToolButton *m_maximize;QList<QWidget*> m_grips;QPoint m_press;bool m_pressed=false;
+    QMainWindow *m_window;QLabel *m_title;QToolButton *m_minimize,*m_maximize,*m_close;QList<QWidget*> m_grips;QPoint m_press;bool m_pressed=false;
 };

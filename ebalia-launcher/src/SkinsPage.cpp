@@ -33,6 +33,9 @@ SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *in
         bool ok;auto value=QInputDialog::getItem(this,key("Restore local appearance"),key("Instance"),names,0,false,&ok);if(!ok||names.indexOf(value)<0)return;
         try{SkinManager::removeLocal(targets[names.indexOf(value)].dir);m_details->setText(key("Local appearance restored."));}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
     });
+    // Skins of the library only: the one an account wears comes from Microsoft or the game.
+    m_remove=add(key("Delete skin"),[this]{removeSkin();});m_remove->setObjectName("deleteSkin");m_remove->setProperty("danger",true);m_remove->setEnabled(false);
+    auto shortcut=new QShortcut(QKeySequence::Delete,m_list,nullptr,nullptr,Qt::WidgetShortcut);connect(shortcut,&QShortcut::activated,this,[this]{if(m_remove->isEnabled())removeSkin();});
     connect(m_accounts,&AccountManager::accountsChanged,this,[this]{refresh();});
     auto note=new QLabel(key("Microsoft skins are visible on servers. Local skins only change default textures on this client; other default players may also look different."));note->setWordWrap(true);note->setObjectName("muted");controls->addWidget(note);refresh();
 }
@@ -57,7 +60,16 @@ void SkinsPage::refresh(){m_list->clear();m_list->setIconSize(QSize(32,32));
         m_list->insertItem(0,new QListWidgetItem(headIcon(skin),name+" · "+key("Current skin")+" (Microsoft)"));m_list->setCurrentRow(0);});
     watcher->setFuture(QtConcurrent::run([uuid,file]{return SkinManager::fetchProfileSkin(uuid,file);}));
 }
-void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setSkin(image,o["variant"].toString()=="slim");m_details->setText(o["name"].toString());}
+void SkinsPage::showSkin(){int index=m_list->currentRow();const bool valid=index>=0&&index<m_skins.size();if(m_remove)m_remove->setEnabled(valid&&m_skins[index].toObject().contains("id")&&!m_skins[index].toObject()["current"].toBool());if(!valid)return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setSkin(image,o["variant"].toString()=="slim");m_details->setText(o["name"].toString());}
+void SkinsPage::removeSkin(){
+    const int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;const auto o=m_skins[index].toObject();if(!o.contains("id")||o["current"].toBool())return;
+    if(QMessageBox::question(this,"EBALIA",key("Delete the skin “%1” from the library? The PNG you imported stays where it was.").arg(o["name"].toString()))!=QMessageBox::Yes)return;
+    try{SkinManager(m_root).removeSkin(QFileInfo(o["file"].toString()).completeBaseName());}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));return;}
+    // Out of the list without reading the library and the account's skin again; the next one is shown.
+    m_skins.removeAt(index);delete m_list->takeItem(index);
+    if(m_list->count())m_list->setCurrentRow(std::min(index,m_list->count()-1));
+    else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setMessage(key("Skins"));m_remove->setEnabled(false);}
+}
 void SkinsPage::importSkin(){
     auto file=QFileDialog::getOpenFileName(this,key("Import PNG skin"),{},"PNG (*.png)");if(file.isEmpty())return;QDialog dialog(this);dialog.setWindowTitle(key("Import PNG skin"));QFormLayout form(&dialog);QLineEdit name(QFileInfo(file).completeBaseName());QComboBox variant;variant.addItem(key("Classic"),"classic");variant.addItem(key("Slim"),"slim");form.addRow(key("Name"),&name);form.addRow(key("Model"),&variant);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);if(Ui::openWindow(dialog)!=QDialog::Accepted)return;
     try{SkinManager(m_root).importSkin(file,name.text(),variant.currentData().toString());refresh();}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}

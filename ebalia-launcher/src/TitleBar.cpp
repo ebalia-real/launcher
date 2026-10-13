@@ -64,12 +64,17 @@ TitleBar::TitleBar(QMainWindow *window):QWidget(window),m_window(window){
     m_title=new QLabel(window->windowTitle());m_title->setObjectName("titleBarText");row->addWidget(m_title,1);
     auto control=[this,row](const QString &kind,const QString &tip,const char *name){
         auto b=new QToolButton;b->setObjectName(name);b->setIcon(glyph(kind));b->setIconSize({20,20});b->setFixedSize(46,barHeight);b->setAutoRaise(true);b->setFocusPolicy(Qt::NoFocus);b->setToolTip(tip);b->setAccessibleName(tip);row->addWidget(b);return b;};
-    connect(control("minimize",Language::key("Minimize"),"titleMinimize"),&QToolButton::clicked,this,[this]{m_window->showMinimized();});
-    m_maximize=control("maximize",Language::key("Maximize"),"titleMaximize");connect(m_maximize,&QToolButton::clicked,this,&TitleBar::toggleMaximized);
-    connect(control("close",Language::key("Close"),"titleClose"),&QToolButton::clicked,m_window,&QWidget::close);
+    m_minimize=control("minimize",{},"titleMinimize");connect(m_minimize,&QToolButton::clicked,this,[this]{m_window->showMinimized();});
+    m_maximize=control("maximize",{},"titleMaximize");connect(m_maximize,&QToolButton::clicked,this,&TitleBar::toggleMaximized);
+    m_close=control("close",{},"titleClose");connect(m_close,&QToolButton::clicked,m_window,&QWidget::close);
     for(const Qt::Edges edges:{Qt::Edges(Qt::TopEdge),Qt::Edges(Qt::BottomEdge),Qt::Edges(Qt::LeftEdge),Qt::Edges(Qt::RightEdge),Qt::TopEdge|Qt::LeftEdge,Qt::TopEdge|Qt::RightEdge,Qt::BottomEdge|Qt::LeftEdge,Qt::BottomEdge|Qt::RightEdge})
         m_grips<<new Grip(window,edges);
     window->installEventFilter(this);sync();
+}
+void TitleBar::retranslate(){
+    const bool full=m_window->isMaximized()||m_window->isFullScreen();
+    const QList<QPair<QToolButton*,QString>> tips{{m_minimize,Language::key("Minimize")},{m_maximize,full?Language::key("Restore"):Language::key("Maximize")},{m_close,Language::key("Close")}};
+    for(const auto &[button,tip]:tips){button->setToolTip(tip);button->setAccessibleName(tip);}
 }
 void TitleBar::toggleMaximized(){if(m_window->isMaximized())m_window->showNormal();else m_window->showMaximized();}
 // Dragging starts only past the drag distance, so a double-click still reaches the bar instead of the compositor.
@@ -89,7 +94,7 @@ bool TitleBar::eventFilter(QObject *watched,QEvent *event){
 }
 void TitleBar::sync(){
     const bool full=m_window->isMaximized()||m_window->isFullScreen();setVisible(!m_window->isFullScreen()); // full screen: no bar at all
-    m_maximize->setIcon(glyph(full?"restore":"maximize"));m_maximize->setToolTip(full?Language::key("Restore"):Language::key("Maximize"));m_maximize->setAccessibleName(m_maximize->toolTip());
+    m_maximize->setIcon(glyph(full?"restore":"maximize"));retranslate();
     const int w=m_window->width(),h=m_window->height();
     for(auto widget:m_grips){auto grip=static_cast<Grip*>(widget);const auto e=grip->edges();
         QRect r;if(e==Qt::TopEdge)r={corner,0,w-2*corner,edge};else if(e==Qt::BottomEdge)r={corner,h-edge,w-2*corner,edge};

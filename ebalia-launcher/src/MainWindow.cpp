@@ -101,6 +101,22 @@ public:
     bool hasHeightForWidth() const override {return layout()&&layout()->hasHeightForWidth();}
     int heightForWidth(int width) const override {return layout()?layout()->totalHeightForWidth(width):QPushButton::heightForWidth(width);}
 };
+// Cards in as many columns as fit (up to three), each row as tall as its longest card.
+class CardGrid:public QWidget {
+public:
+    explicit CardGrid(int cardWidth):m_cardWidth(cardWidth),m_grid(new QGridLayout(this)){m_grid->setContentsMargins(0,0,0,0);m_grid->setSpacing(12);}
+    void add(QWidget *card){m_cards<<card;m_columns=0;arrange(width());}
+protected:
+    void resizeEvent(QResizeEvent *event) override {QWidget::resizeEvent(event);arrange(event->size().width());}
+private:
+    void arrange(int width){
+        const int columns=qBound(1,(width+12)/(m_cardWidth+12),3);if(columns==m_columns)return;m_columns=columns;
+        for(auto card:m_cards)m_grid->removeWidget(card);
+        for(int n=0;n<m_cards.size();++n)m_grid->addWidget(m_cards[n],n/columns,n%columns);
+        for(int column=0;column<3;++column)m_grid->setColumnStretch(column,column<columns?1:0);
+    }
+    int m_cardWidth,m_columns=0;QGridLayout *m_grid;QList<QWidget*> m_cards;
+};
 // One-line label that shrinks with "…" instead of being cut (picker, account and player names).
 class Elided:public QLabel {
 public:
@@ -349,6 +365,7 @@ void MainWindow::build() {
     m_status=label(text("Todo listo","Ready","Tudo pronto"),sl,"statusText",false);m_status->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);sl->setStretch(0,1);
     m_progress=new QProgressBar;m_progress->setFixedWidth(200);m_progress->setValue(0);m_progress->setTextVisible(false);m_progress->hide();sl->addWidget(m_progress);right->addWidget(status);
     refreshAccounts();refreshInstances();refreshPacks();refreshLost();refreshNews(false);showPage(current);adaptSidebar();
+    if(auto bar=dynamic_cast<TitleBar*>(menuWidget()))bar->retranslate(); // after a change of language
 }
 QWidget *MainWindow::buildSidebar() {
     auto bar=new QFrame;bar->setObjectName("sidebar");bar->setFixedWidth(244);auto l=new QVBoxLayout(bar);l->setContentsMargins(14,16,14,12);l->setSpacing(10);
@@ -615,23 +632,40 @@ void MainWindow::startTour() {
 }
 QWidget *MainWindow::buildGuide() {
     auto s=section(k("Guide & tutorial"),text("Esta guía siempre está disponible en la barra lateral.","This guide is always available in the sidebar.","Este guia está sempre disponível na barra lateral."));auto l=s.layout;
+    // Silence and the two ways to start: the interactive tour or a first instance.
     auto hero=new QFrame;hero->setObjectName("guideMascotCard");hero->setStyleSheet("#guideMascotCard{background:#1b2019;border:1px solid #2f3d2a;border-radius:14px;}");l->addWidget(hero);
-    auto heroRow=new QHBoxLayout(hero);heroRow->setContentsMargins(12,8,18,10);heroRow->setSpacing(14);
-    auto mascot=new TourMascot;mascot->setObjectName("guideMascot");mascot->setFixedSize(100,146);mascot->setToolTip("Silence");heroRow->addWidget(mascot,0,Qt::AlignBottom);
+    auto heroRow=new QHBoxLayout(hero);heroRow->setContentsMargins(12,6,18,8);heroRow->setSpacing(14);
+    auto mascot=new TourMascot;mascot->setObjectName("guideMascot");mascot->setFixedSize(84,122);mascot->setToolTip("Silence");heroRow->addWidget(mascot,0,Qt::AlignBottom);
     auto wave=new QTimer(mascot);wave->setInterval(7000);wave->start();
     connect(wave,&QTimer::timeout,mascot,[mascot]{static const TourMascot::Mood moods[]{TourMascot::Happy,TourMascot::Wink,TourMascot::Idle,TourMascot::Cheer,TourMascot::Think,TourMascot::Point};static int next=0;mascot->react(moods[next++%6]);});
     mascot->setMood(TourMascot::Happy);
     auto heroText=new QVBoxLayout;heroText->setSpacing(10);heroRow->addLayout(heroText,1);heroText->addStretch();
     auto hello=new QLabel(text("¡Hola! Soy Silence. Te acompaño en la guía interactiva y te muestro cada parte del launcher.","Hi! I'm Silence. I'll walk you through the interactive tour and show you every part of the launcher.","Olá! Eu sou o Silence. Vou te acompanhar no guia interativo e mostrar cada parte do launcher."));
     hello->setObjectName("guideMascotHello");hello->setWordWrap(true);hello->setStyleSheet("font-size:15px;");heroText->addWidget(hello);
-    auto tourRow=new QHBoxLayout;heroText->addLayout(tourRow);heroText->addStretch();button(text("Iniciar guía interactiva","Start interactive tour","Iniciar guia interativo"),tourRow,[this]{startTour();},this,true,"compass")->setObjectName("startInteractiveTour");tourRow->addStretch();
-    auto guide=new QTextBrowser;guide->setObjectName("guide");guide->setOpenExternalLinks(false);guide->setHtml(text(
+    // Side by side when they fit, one over the other in a narrow window.
+    auto tourButtons=new Ui::ResponsiveRow(520);auto tourRow=tourButtons->box();tourRow->setSpacing(10);heroText->addWidget(tourButtons);heroText->addStretch();button(text("Iniciar guía interactiva","Start interactive tour","Iniciar guia interativo"),tourRow,[this]{startTour();},this,true,"compass")->setObjectName("startInteractiveTour");
+    button(text("Crear mi primera instancia","Create my first instance","Criar minha primeira instância"),tourRow,[this]{showPage(Instances);createInstance();},this,false,"plus");tourRow->addStretch();
+    // The guide and the questions in their own tabs. The guide's steps are cards side by side, all in view at once.
+    auto tabs=new QTabWidget;tabs->setObjectName("guideTabs");tabs->setDocumentMode(true);tabs->setIconSize(QSize(18,18));l->addWidget(tabs,1);
+    auto scrolling=[](QWidget *content){auto area=new QScrollArea;area->setWidgetResizable(true);area->setFrameShape(QFrame::NoFrame);area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);area->setWidget(content);return area;};
+    auto steps=new CardGrid(300);steps->setObjectName("guideSteps");auto stepsPage=new QWidget;stepsPage->setObjectName("guide");auto stepsLayout=new QVBoxLayout(stepsPage);stepsLayout->setContentsMargins(0,14,8,8);stepsLayout->addWidget(steps);stepsLayout->addStretch();
+    const QString guide=text(
         "<h2>1. Elegí tu modo</h2><p><b>Mis instancias</b> es el cliente normal de Minecraft. <b>Versiones perdidas</b> abre el archivo de EBALIA.</p><h2>2. Creá una instancia</h2><p>Elegí un nombre, una versión y un cargador. Vanilla es el juego original; Fabric, Quilt, Forge o NeoForge permiten mods. Los mundos y ajustes quedan separados. El catálogo se actualiza al abrir y cada 30 minutos. Las instancias existentes conservan su versión para cuidar tus mundos.</p><h2>3. Agregá mods</h2><p>En <b>Explorar mods</b>, seleccioná tu instancia y buscá Sodium, luces dinámicas, FallingTree o Veinminer. Revisá las dependencias y confirmá la instalación. La compatibilidad publicada no garantiza que todos los mods funcionen juntos.</p><h2>4. Guardá tus favoritos como pack</h2><p>En tu instancia, usá <b>Guardar mods como pack</b>. Luego aplicalo desde <b>Mis packs</b> a otra instancia. Buscamos una edición para su versión y cargador; si no existe, te lo mostramos antes de descargar. No copiamos un JAR incompatible. Los mods locales deben poder identificarse en Modrinth; los desactivados no se incluyen.</p><h2>5. Jugá</h2><p>Agregá una cuenta, instalá Java y pulsá <b>Jugar / Instalar</b>. Una vez terminada la instalación, pulsá Jugar. Si falta Java, el launcher indica qué versión requiere el juego. Podés elegir su ruta y memoria en los ajustes de instancia.</p><h2>Si algo falla</h2><p>Abrí <b>Ajustes de instancia → Registro</b>. Reparar vuelve a comprobar las descargas del juego. Quitar una instancia la mueve a la papelera local con sus mundos. Forge y NeoForge se instalan con sus instaladores oficiales y necesitan Java antes de comenzar. Las versiones perdidas pueden requerir Wine, Java antiguo o paquetes originales que ya no estén disponibles.</p>",
         "<h2>1. Choose your mode</h2><p><b>My instances</b> is the regular Minecraft client. <b>Lost versions</b> opens the EBALIA archive.</p><h2>2. Create an instance</h2><p>Choose a name, game version and loader. Vanilla is the original game; Fabric, Quilt, Forge or NeoForge support mods. Worlds and settings stay separate. The catalog refreshes at startup and every 30 minutes. Existing instances keep their game version to protect your worlds.</p><h2>3. Add mods</h2><p>In <b>Discover mods</b>, choose your instance and search for Sodium, dynamic lights, FallingTree or Veinminer. Review dependencies and confirm installation. Published compatibility does not guarantee that all mods work together.</p><h2>4. Save your favorites as a pack</h2><p>Use <b>Save mods as a pack</b> on your instance. Apply it to another instance from <b>My packs</b>. We look up builds for its game version and loader; unavailable mods are listed before downloading. Incompatible JARs are never copied. Local mods must be identifiable on Modrinth; disabled mods are excluded.</p><h2>5. Play</h2><p>Add an account, install Java and press <b>Play / Install</b>. After installation finishes, press Play. If Java is missing, the launcher tells you which version the game requires. Choose its path and memory in instance settings.</p><h2>Troubleshooting</h2><p>Open <b>Instance settings → Log</b>. Repair verifies game downloads again. Removing an instance moves it to local trash with its worlds. Forge and NeoForge use their official installers and require Java before installation. Lost versions may require Wine, older Java or original packages that are no longer available.</p>",
-        "<h2>1. Escolha seu modo</h2><p><b>Minhas instâncias</b> é o cliente normal do Minecraft. <b>Versões perdidas</b> abre o arquivo da EBALIA.</p><h2>2. Crie uma instância</h2><p>Escolha um nome, uma versão e um carregador. Vanilla é o jogo original; Fabric, Quilt, Forge ou NeoForge permitem mods. Mundos e ajustes ficam separados. O catálogo é atualizado ao abrir e a cada 30 minutos. Instâncias existentes mantêm sua versão para preservar seus mundos.</p><h2>3. Adicione mods</h2><p>Em <b>Explorar mods</b>, escolha a instância e busque Sodium, luzes dinâmicas, FallingTree ou Veinminer. Revise as dependências e confirme a instalação. A compatibilidade publicada não garante que todos os mods funcionem juntos.</p><h2>4. Salve seus favoritos como pack</h2><p>Use <b>Salvar mods como pack</b> na instância. Depois aplique em outra instância por <b>Meus packs</b>. Buscamos edições para a versão e o carregador de destino; mods indisponíveis são mostrados antes do download. Não copiamos JARs incompatíveis. Mods locais precisam ser identificados no Modrinth; mods desativados não entram no pack.</p><h2>5. Jogue</h2><p>Adicione uma conta, instale Java e clique em <b>Jogar / Instalar</b>. Ao terminar a instalação, clique em Jogar. Se faltar Java, o launcher indica a versão necessária. Escolha o caminho e a memória nos ajustes da instância.</p><h2>Se algo falhar</h2><p>Abra <b>Ajustes da instância → Registro</b>. Reparar verifica novamente os downloads do jogo. Remover uma instância move seus mundos para a lixeira local. Forge e NeoForge usam seus instaladores oficiais e precisam de Java antes da instalação. Versões perdidas podem precisar de Wine, Java antigo ou pacotes originais indisponíveis.</p>"));l->addWidget(guide,1);
-    auto row=new QHBoxLayout;l->addLayout(row);button(text("Crear mi primera instancia","Create my first instance","Criar minha primeira instância"),row,[this]{showPage(Instances);createInstance();},this,true,"plus");row->addStretch();
+        "<h2>1. Escolha seu modo</h2><p><b>Minhas instâncias</b> é o cliente normal do Minecraft. <b>Versões perdidas</b> abre o arquivo da EBALIA.</p><h2>2. Crie uma instância</h2><p>Escolha um nome, uma versão e um carregador. Vanilla é o jogo original; Fabric, Quilt, Forge ou NeoForge permitem mods. Mundos e ajustes ficam separados. O catálogo é atualizado ao abrir e a cada 30 minutos. Instâncias existentes mantêm sua versão para preservar seus mundos.</p><h2>3. Adicione mods</h2><p>Em <b>Explorar mods</b>, escolha a instância e busque Sodium, luzes dinâmicas, FallingTree ou Veinminer. Revise as dependências e confirme a instalação. A compatibilidade publicada não garante que todos os mods funcionem juntos.</p><h2>4. Salve seus favoritos como pack</h2><p>Use <b>Salvar mods como pack</b> na instância. Depois aplique em outra instância por <b>Meus packs</b>. Buscamos edições para a versão e o carregador de destino; mods indisponíveis são mostrados antes do download. Não copiamos JARs incompatíveis. Mods locais precisam ser identificados no Modrinth; mods desativados não entram no pack.</p><h2>5. Jogue</h2><p>Adicione uma conta, instale Java e clique em <b>Jogar / Instalar</b>. Ao terminar a instalação, clique em Jogar. Se faltar Java, o launcher indica a versão necessária. Escolha o caminho e a memória nos ajustes da instância.</p><h2>Se algo falhar</h2><p>Abra <b>Ajustes da instância → Registro</b>. Reparar verifica novamente os downloads do jogo. Remover uma instância move seus mundos para a lixeira local. Forge e NeoForge usam seus instaladores oficiais e precisam de Java antes da instalação. Versões perdidas podem precisar de Wine, Java antigo ou pacotes originais indisponíveis.</p>");
+    static const QRegularExpression part("<h2>(.*?)</h2>(.*?)(?=<h2>|$)",QRegularExpression::DotMatchesEverythingOption),numbered("^(\\d+)\\.\\s*(.*)$");
+    for(auto it=part.globalMatch(guide);it.hasNext();){
+        const auto m=it.next();const auto heading=numbered.match(m.captured(1));
+        auto card=new QFrame;card->setObjectName("guideStep");card->setStyleSheet("#guideStep{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#guideStep QLabel{background:transparent;}");
+        auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,16);cl->setSpacing(8);auto head=new QHBoxLayout;head->setSpacing(10);cl->addLayout(head);
+        auto badge=new QLabel;badge->setObjectName("statIcon");badge->setFixedSize(32,32);badge->setAlignment(Qt::AlignCenter);
+        if(heading.hasMatch()){badge->setText(heading.captured(1));badge->setStyleSheet("font-weight:900;font-size:15px;color:"+Ui::accent().name()+";");}else badge->setPixmap(Ui::pixmap("wrench",18,Ui::accent()));
+        head->addWidget(badge);auto title=new QLabel(heading.hasMatch()?heading.captured(2):m.captured(1));title->setObjectName("guideStepTitle");title->setWordWrap(true);title->setStyleSheet("font-size:16px;font-weight:800;");head->addWidget(title,1);
+        auto body=new QLabel(m.captured(2).trimmed());body->setObjectName("guideStepText");body->setTextFormat(Qt::RichText);body->setWordWrap(true);body->setStyleSheet("color:#cfcfd4;line-height:140%;");cl->addWidget(body);cl->addStretch();
+        steps->add(card);
+    }
+    tabs->addTab(scrolling(stepsPage),Ui::icon("book-open"),text("Guía","Guide","Guia"));
     // Questions and answers: a question opens its answer.
-    label(text("Preguntas frecuentes","Questions & answers","Perguntas frequentes"),l,"sectionTitle",false)->setObjectName("guideFaqTitle");
     struct Qa{const char *es,*en,*pt,*aes,*aen,*apt;};
     const Qa faq[]{
         {"¿Cómo importo un modpack o una instancia de otro launcher?","How do I import a modpack or another launcher's instance?","Como importo um modpack ou uma instância de outro launcher?",
@@ -682,7 +716,7 @@ QWidget *MainWindow::buildGuide() {
          "El launcher todavía no está firmado digitalmente, por eso Windows puede avisar. Descargalo solo desde la página oficial o GitHub y comprobá su SHA-256, que figura junto a cada descarga.",
          "The launcher is not digitally signed yet, so Windows may warn. Download it only from the official website or GitHub and check its SHA-256, shown next to each download.",
          "O launcher ainda não tem assinatura digital, por isso o Windows pode avisar. Baixe somente pelo site oficial ou GitHub e confira o SHA-256, mostrado ao lado de cada download."}};
-    auto faqBox=new QVBoxLayout;faqBox->setSpacing(8);l->addLayout(faqBox);
+    auto faqPage=new QWidget;faqPage->setObjectName("guideFaq");auto faqBox=new QVBoxLayout(faqPage);faqBox->setContentsMargins(0,14,8,8);faqBox->setSpacing(8);
     for(const auto &qa:faq){
         auto card=new QFrame;card->setObjectName("faqItem");card->setStyleSheet("#faqItem{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#faqItem QLabel{background:transparent;}");faqBox->addWidget(card);
         auto cl=new QVBoxLayout(card);cl->setContentsMargins(6,4,14,8);cl->setSpacing(2);
@@ -693,6 +727,7 @@ QWidget *MainWindow::buildGuide() {
         auto answer=label(text(qa.aes,qa.aen,qa.apt),cl,"muted");answer->setObjectName("faqAnswer");answer->setContentsMargins(28,0,0,6);answer->hide();
         connect(question,&QPushButton::toggled,card,[arrow,answer](bool open){answer->setVisible(open);arrow->setPixmap(Ui::pixmap(open?"chevron-down":"chevron-right",16,Ui::accent()));});
     }
+    faqBox->addStretch();tabs->addTab(scrolling(faqPage),Ui::icon("file-text"),text("Preguntas frecuentes","Questions & answers","Perguntas frequentes"));
     return s.widget;
 }
 QWidget *MainWindow::buildSettings() {
@@ -1275,7 +1310,7 @@ void MainWindow::manageContent(const QString &folder){
     QListWidget list;list.setObjectName("contentList");list.setIconSize({48,48});lay.addWidget(&list,1);
     auto detail=[packs,worlds](const InstanceContent::Entry &e){
         if(worlds)return InstanceText::lastPlayed(e.modified.toSecsSinceEpoch());
-        const auto what=packs&&!e.description.isEmpty()?e.description:e.directory?text("Carpeta","Folder","Pasta"):QLocale().formattedDataSize(e.size);
+        const auto what=packs&&!e.description.isEmpty()?e.description:e.directory?text("Carpeta","Folder","Pasta"):QLocale(Language::current).formattedDataSize(e.size);
         return e.active?text("En uso","In use","Em uso")+"  ·  "+what:what;};
     auto icon=[](const QImage &image){return QIcon(QPixmap::fromImage(image.scaled(48,48,Qt::KeepAspectRatio,image.width()<=48?Qt::FastTransformation:Qt::SmoothTransformation)));};
     std::function<void(const QString&)> refresh=[&,folder,shaders](const QString &keep){
@@ -1312,8 +1347,10 @@ void MainWindow::manageContent(const QString &folder){
         toggle=button({},row,[&]{const auto file=current();if(file.isEmpty()||!idle())return;const bool on=list.currentItem()->data(Qt::UserRole+1).toBool();
             try{if(packs)InstanceContent::setResourcePack(i.dir,file,!on);else InstanceContent::setShader(i.dir,on?QString():file);}catch(...){error(exception());}refresh(file);},&d,false,shaders?"sparkles":"square");
         toggle->setObjectName("toggleContent");
-        auto relabel=[&,toggle]{const bool on=list.currentItem()&&list.currentItem()->data(Qt::UserRole+1).toBool();toggle->setEnabled(!current().isEmpty());
-            toggle->setText(packs?(on?text("Desactivar","Turn off","Desativar"):text("Activar","Turn on","Ativar")):(on?text("Apagar shaders","Turn shaders off","Desligar shaders"):text("Usar este shader","Use this shader","Usar este shader")));};
+        const QString turnOff=packs?text("Desactivar","Turn off","Desativar"):text("Apagar shaders","Turn shaders off","Desligar shaders"),turnOn=packs?text("Activar","Turn on","Ativar"):text("Usar este shader","Use this shader","Usar este shader");
+        // As wide as its longer label, so the row does not move when the label changes.
+        {int widest=0;for(const auto &label:{turnOff,turnOn}){toggle->setText(label);widest=std::max(widest,toggle->sizeHint().width());}toggle->setMinimumWidth(widest);}
+        auto relabel=[&,toggle,turnOff,turnOn]{const bool on=list.currentItem()&&list.currentItem()->data(Qt::UserRole+1).toBool();toggle->setEnabled(!current().isEmpty());toggle->setText(on?turnOff:turnOn);};
         connect(&list,&QListWidget::currentItemChanged,&d,relabel);relabel();
         connect(&list,&QListWidget::itemDoubleClicked,&d,[toggle](QListWidgetItem *item){if(item->data(Qt::UserRole).isValid())toggle->click();});
     }else{

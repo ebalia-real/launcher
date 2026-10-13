@@ -12,7 +12,7 @@ target_include_directories(md4c-html PUBLIC third_party/md4c)
 set_target_properties(md4c-html PROPERTIES C_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
 add_library(ebalia-core STATIC
   src/JavaDownloader.cpp src/LostInstaller.cpp src/PackService.cpp src/Download.cpp src/JavaRuntime.cpp src/SkinManager.cpp src/ModRepository.cpp src/Loaders.cpp src/McInstanceManager.cpp src/Archive.cpp src/JavaRunner.cpp
-  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp src/ModPage.cpp src/InstanceContent.cpp
+  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp src/ModPage.cpp src/InstanceContent.cpp src/Sound.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
 # Configure the key for this build without putting it in the source code.
@@ -24,6 +24,12 @@ endif()
 configure_file(src/BuildConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.hpp" @ONLY)
 target_include_directories(ebalia-core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(ebalia-core PUBLIC Qt6::Widgets Qt6::Network Qt6::Concurrent LibArchive::LibArchive PRIVATE md4c-html)
+# The guide's sounds (Sound.cpp): PlaySound on Windows, System Sound Services on macOS; Linux loads PulseAudio at run time.
+if(WIN32)
+  target_link_libraries(ebalia-core PRIVATE winmm)
+elseif(APPLE)
+  target_link_libraries(ebalia-core PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+endif()
 set(EBALIA_PATREON_SERVICE_URL "" CACHE STRING "Public HTTPS URL of the EBALIA Patreon service")
 if(EBALIA_PATREON_SERVICE_URL STREQUAL "" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/patreon-service-url.txt")
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/patreon-service-url.txt" EBALIA_PATREON_SERVICE_URL)

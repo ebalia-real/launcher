@@ -23,6 +23,7 @@
 #include "ServerList.hpp"
 #include "SkinsPage.hpp"
 #include "SkinViewer.hpp"
+#include "SkinManager.hpp"
 #include "TitleBar.hpp"
 #include "InstanceContent.hpp"
 #include <QTcpSocket>
@@ -166,6 +167,11 @@ private slots:
         QTRY_VERIFY(window.findChild<QWidget*>("interactiveTour"));
         auto tour=window.findChild<QWidget*>("interactiveTour");auto next=tour->findChild<QPushButton*>("tourNext");
         QVERIFY(next);QVERIFY(!tour->findChild<QPushButton*>("tourBack")->isEnabled());
+        // The step's text is written letter by letter, laid out whole from the start; the speaker turns Silence's sounds off.
+        auto body=tour->findChild<QLabel*>("tourBody");QVERIFY(body->text().contains("color:transparent"));const auto cardSize=tour->findChild<QFrame*>("tourCard")->size();
+        QTRY_VERIFY_WITH_TIMEOUT(!body->text().contains("color:transparent\">B")&&body->text().endsWith("<span style=\"color:transparent\"></span>"),8000);QCOMPARE(tour->findChild<QFrame*>("tourCard")->size(),cardSize);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/tour-step.png");
+        auto sound=tour->findChild<QToolButton*>("tourSound");QVERIFY(sound);const bool was=sound->isChecked();sound->click();QCOMPARE(QSettings().value("ui/sounds",true).toBool(),!was);sound->click();
         for(int i=0;i<13;++i){next->click();QTest::qWait(10);QVERIFY(tour->rect().contains(tour->findChild<QFrame*>("tourCard")->geometry()));}
         next->click();QTRY_VERIFY(!window.findChild<QWidget*>("interactiveTour"));QVERIFY(QSettings().value("ui/tutorialSeen").toBool());
         window.showPage(MainWindow::Guide);window.findChild<QPushButton*>("startInteractiveTour")->click();
@@ -334,11 +340,17 @@ private slots:
     void guideQuestionsAndAnswers(){
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
         MainWindow window;window.resize(1280,900);window.show();window.showPage(MainWindow::Guide);QTest::qWait(100);
+        // The guide's steps are all in view at 1280 × 900, without scrolling: three columns, two rows.
+        auto steps=window.findChildren<QFrame*>("guideStep");QCOMPARE(steps.size(),6);
+        auto stepsArea=qobject_cast<QScrollArea*>(window.findChild<QWidget*>("guide")->parentWidget()->parentWidget());QVERIFY(stepsArea);QVERIFY(!stepsArea->verticalScrollBar()->isVisible());
+        QCOMPARE(steps[0]->y(),steps[2]->y());QVERIFY(steps[3]->y()>steps[0]->y());
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/guide-steps.png");
+        auto tabs=window.findChild<QTabWidget*>("guideTabs");QVERIFY(tabs);tabs->setCurrentIndex(1);QTest::qWait(50);
         auto questions=window.findChildren<QPushButton*>("faqQuestion");QVERIFY(questions.size()>=10);auto answers=window.findChildren<QLabel*>("faqAnswer");
         for(auto a:answers)QVERIFY(!a->isVisible());
         QTest::mouseClick(questions[0],Qt::LeftButton);QVERIFY(answers[0]->isVisible());QVERIFY(answers[0]->text().contains(".mrpack"));
         QTest::mouseClick(questions[1],Qt::LeftButton);QTest::qWait(50);
-        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);auto page=questions[0]->window()->findChild<QWidget*>("guide")->parentWidget();page->grab().save(out+"/guide-faq.png");
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);window.grab().save(out+"/guide-faq.png");
             for(auto card:window.findChildren<QFrame*>("modCard")){}window.showPage(MainWindow::Home);QTest::qWait(400);window.grab().save(out+"/home-mods.png");}
         QTest::mouseClick(questions[0],Qt::LeftButton);QVERIFY(!answers[0]->isVisible());
     }
@@ -588,6 +600,16 @@ private slots:
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(window.isMaximized());
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(!window.isMaximized());
         window.findChild<QToolButton*>("titleMaximize")->click();QTRY_VERIFY(window.isMaximized());
+    }
+    void deleteSkin(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        QImage image(64,64,QImage::Format_ARGB32);image.fill(QColor(30,140,200));const auto png=data.path()+"/blue.png";QVERIFY(image.save(png));
+        SkinManager(data.path()).importSkin(png,"Blue","classic");SkinManager(data.path()).importSkin(png,"Blue slim","slim");
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Skins);
+        auto list=window.findChild<QListWidget*>("skinList");auto remove=window.findChild<QPushButton*>("deleteSkin");QVERIFY(list&&remove);QCOMPARE(list->count(),2);
+        list->setCurrentRow(1);QVERIFY(remove->isEnabled());
+        QTimer::singleShot(300,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto box=qobject_cast<QMessageBox*>(w);box&&box->isVisible())box->button(QMessageBox::Yes)->click();});
+        remove->click();QCOMPARE(list->count(),1);QCOMPARE(list->currentRow(),0);QCOMPARE(SkinManager(data.path()).skins().size(),1);QVERIFY(QFile::exists(png));
     }
     void skinHeads(){
         // Account pictures become skin heads: Microsoft (a public profile) and a profile without premium (default skin

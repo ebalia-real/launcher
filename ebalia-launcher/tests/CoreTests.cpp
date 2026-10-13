@@ -453,6 +453,13 @@ private slots:
         InstanceContent::remove(dir,"saves","My World");QCOMPARE(InstanceContent::list(dir,"saves").size(),2);QCOMPARE(QDir(dir+"/removed-worlds").entryList(QDir::Dirs|QDir::NoDotAndDotDot).size(),1);
         QVERIFY(QDir(dir).entryList({".import-*"},QDir::Dirs|QDir::Hidden).isEmpty());
     }
+    void skinLibraryRemove(){
+        // Deleting a skin removes the library's copy, never the PNG it came from; only library names are accepted.
+        QTemporaryDir t;QImage image(64,64,QImage::Format_ARGB32);image.fill(Qt::red);const auto png=t.path()+"/in.png";QVERIFY(image.save(png));
+        SkinManager skins(t.path()+"/root");const auto entry=skins.importSkin(png,"Red","classic");QCOMPARE(skins.skins().size(),1);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,skins.removeSkin("../in"));QVERIFY_THROWS_EXCEPTION(std::runtime_error,skins.removeSkin(QString(64,'a')));
+        skins.removeSkin(entry["id"].toString());QVERIFY(skins.skins().isEmpty());QVERIFY(QFile::exists(png));QVERIFY(!QFile::exists(entry["file"].toString()));
+    }
     void skinHead(){
         // The face (8,8) with the hat layer (40,8) drawn over it when that layer has transparency.
         QImage skin(64,64,QImage::Format_ARGB32);skin.fill(Qt::transparent);

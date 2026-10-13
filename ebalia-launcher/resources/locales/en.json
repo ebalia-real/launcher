@@ -1038,5 +1038,12 @@
   "Restore": "Restore",
   "Drag to turn": "Drag to turn",
   "3D view": "3D view",
-  "2D view": "2D view"
+  "2D view": "2D view",
+  "Delete skin": "Delete skin",
+  "Delete the skin “%1” from the library? The PNG you imported stays where it was.": "Delete the skin “%1” from the library? The PNG you imported stays where it was.",
+  "Invalid skin.": "Invalid skin.",
+  "Could not delete the skin.": "Could not delete the skin.",
+  "Guide": "Guide",
+  "Mute Silence": "Mute Silence",
+  "Turn Silence's sounds on": "Turn Silence's sounds on"
 }

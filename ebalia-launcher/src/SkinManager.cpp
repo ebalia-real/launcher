@@ -18,6 +18,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QBuffer>
+#include <QRegularExpression>
 #include <archive.h>
 #include <archive_entry.h>
 #include <memory>
@@ -59,6 +60,11 @@ QJsonObject SkinManager::importSkin(const QString &file,const QString &name,cons
     QJsonObject entry{{"id",id},{"name",name.trimmed()},{"variant",variant},{"file",path}};ModRepository::write(m_root+"/skins/"+id+".json",entry);return entry;
 }
 QJsonArray SkinManager::skins()const{QJsonArray list;QDir dir(m_root+"/skins");for(const auto &file:dir.entryList({"*.json"},QDir::Files)){auto entry=ModRepository::read(dir.filePath(file));entry["file"]=dir.filePath(QFileInfo(file).completeBaseName()+".png");list.append(entry);}return list;}
+void SkinManager::removeSkin(const QString &id){
+    static const QRegularExpression valid("^[0-9a-f]{64}$");const QDir dir(m_root+"/skins");
+    if(!valid.match(id).hasMatch()||!QFile::exists(dir.filePath(id+".json")))fail("Invalid skin.");
+    if(!QFile::remove(dir.filePath(id+".json")))fail("Could not delete the skin.");QFile::remove(dir.filePath(id+".png"));
+}
 QImage SkinManager::preview(const QImage &skin,const QString &variant,bool back){
     QImage out(240,320,QImage::Format_ARGB32_Premultiplied);out.fill(Qt::transparent);QPainter p(&out);p.setRenderHint(QPainter::SmoothPixmapTransform,false);
     int unit=8,arm=variant=="slim"?3:4;int x=120-4*unit,y=24;

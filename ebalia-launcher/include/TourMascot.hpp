@@ -16,6 +16,8 @@ public:
  void react();
  void react(Mood mood){setMood(mood);react();}
  void setMood(Mood mood){m_mood=mood;update();}
+ // Move the jaw for a while, e.g. while the guide's text is being written.
+ void talk(int milliseconds){m_talkUntil=m_clock.elapsed()+milliseconds;}
  Mood mood() const {return m_mood;}
  // Lean toward a point in global coordinates; a null point stands upright.
  void lookAt(QPoint target);
@@ -30,6 +32,6 @@ private:
  Mood m_mood=Idle;
  QTimer m_frame;
  QElapsedTimer m_clock;
- qint64 m_hop=-100000,m_shown=0;
+ qint64 m_hop=-100000,m_shown=0,m_talkUntil=0;
  double m_lean=0,m_leanTarget=0;
 };
