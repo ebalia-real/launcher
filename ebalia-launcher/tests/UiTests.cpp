@@ -539,6 +539,9 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(!window.findChild<QWidget*>("backgroundTaskProgress"),180000);
             qInfo()<<folder<<QDir(dir+"/"+folder).entryList(QDir::Files)<<window.findChild<QLabel*>("statusText")->text();
             QVERIFY(!QDir(dir+"/"+folder).entryList(QDir::Files).isEmpty());
+            // Installed: the list and the button say so.
+            QTRY_VERIFY(results->item(0)->data(Qt::UserRole+1).toBool());
+            QVERIFY(!window.findChild<QPushButton*>("modPreviewInstall")->isEnabled());QVERIFY(window.findChild<QPushButton*>("modPreviewInstall")->text().contains(Language::key("Already installed")));
             // A shader pack has no picture of its own: its window shows the Modrinth project's icon.
             if(folder=="shaderpacks"){const auto file=dir+"/shaderpacks/"+QDir(dir+"/shaderpacks").entryList({"*.zip"},QDir::Files).value(0);
                 QVERIFY(!InstanceContent::modrinthIcon(file,data.path()+"/icons").isNull());QVERIFY(!InstanceContent::modrinthIcon(file,data.path()+"/icons").isNull());} // the second from cache
@@ -607,6 +610,25 @@ private slots:
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(window.isMaximized());
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(!window.isMaximized());
         window.findChild<QToolButton*>("titleMaximize")->click();QTRY_VERIFY(window.isMaximized());
+    }
+    void discoverMarksInstalled(){
+        // A project the instance has says so in the list, and Install neither counts nor installs it again.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        QString dir;{McInstanceManager setup(data.path());dir=setup.createInstance("Packs","1.21.1","fabric");}
+        QDir().mkpath(dir+"/shaderpacks");{QFile zip(dir+"/shaderpacks/Vivid.zip");QVERIFY(zip.open(QIODevice::WriteOnly));zip.write("zip");}
+        ModRepository::write(dir+"/packs.json",QJsonObject{{"packs",QJsonArray{QJsonObject{{"project_id","vivid"},{"kind","shader"},{"filename","Vivid.zip"},{"title","Vivid"}}}}});
+        MainWindow window;window.resize(1280,820);window.show();auto results=window.findChild<QListWidget*>("modResults");
+        for(const auto &[id,name]:QList<std::pair<QString,QString>>{{"vivid","Vivid Horizon"},{"other","Other Shader"}}){
+            auto item=new QListWidgetItem(name,results);item->setData(Qt::UserRole,QJsonObject{{"project_id",id},{"title",name},{"author","Someone"},{"description","Shader"}});}
+        window.showPage(MainWindow::Explore);
+        QVERIFY(results->item(0)->text().startsWith("✓"));QVERIFY(results->item(0)->text().contains(Language::key("Already installed")));QVERIFY(!results->item(1)->text().startsWith("✓"));
+        auto install=window.findChild<QPushButton*>("modPreviewInstall");
+        results->setCurrentRow(0);QVERIFY(!install->isEnabled());QVERIFY(install->text().contains(Language::key("Already installed")));
+        results->setCurrentRow(1);QVERIFY(install->isEnabled());
+        results->item(0)->setSelected(true);results->item(1)->setSelected(true);QVERIFY(install->isEnabled());QVERIFY(!install->text().contains("(2)"));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/discover-installed.png");
+        // The pack removed from its folder: installable again.
+        QFile::remove(dir+"/shaderpacks/Vivid.zip");window.showPage(MainWindow::Home);window.showPage(MainWindow::Explore);QVERIFY(!results->item(0)->text().startsWith("✓"));
     }
     void liveLog(){
         QTemporaryDir dir;auto write=[&](const QByteArray &bytes,bool fresh){QFile f(dir.path()+"/launcher.log");if(f.open(fresh?QIODevice::WriteOnly:QIODevice::Append))f.write(bytes);};

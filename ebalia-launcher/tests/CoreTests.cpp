@@ -399,6 +399,12 @@ private slots:
         QCOMPARE(r["filename"].toString(),QString("Faithful.zip"));QCOMPARE(readFile(dir+"/resourcepacks/Faithful.zip"),pack);
         QVERIFY(asked.contains("https://api.modrinth.com/v2/project/faithful/version?game_versions=[\"1.21.1\"]"));
         QVERIFY_EXCEPTION_THROWN(repo.installPack(dir,"../escape","1.21.1","resourcepack"),std::runtime_error);
+        // Discover knows what the instance has: the pack while its file is there, mods from mods.json also when turned off.
+        QCOMPARE(ModRepository::installedProjects(dir),QSet<QString>{"faithful"});
+        ModRepository::write(dir+"/mods.json",QJsonObject{{"mods",QJsonArray{QJsonObject{{"project_id","AANobbMI"},{"filename","sodium.jar"}},QJsonObject{{"project_id","gone"},{"filename","gone.jar"}}}}});
+        {QFile jar(dir+"/mods/sodium.jar.disabled");QVERIFY(jar.open(QIODevice::WriteOnly));}
+        QCOMPARE(ModRepository::installedProjects(dir),(QSet<QString>{"faithful","AANobbMI"}));
+        QFile::remove(dir+"/resourcepacks/Faithful.zip");QCOMPARE(ModRepository::installedProjects(dir),QSet<QString>{"AANobbMI"});
         // CurseForge: texture packs are class 12, shaders 6552, and no loader type is sent.
         QStringList curse;ModRepository cf(t.path(),[&](const QUrl &url){curse<<QUrl::fromPercentEncoding(url.toEncoded());return encode(QJsonObject{{"data",QJsonArray{}}});});
         cf.search("","1.21.1","fabric",0,"curseforge","shader");QVERIFY(curse.last().contains("classId=6552"));QVERIFY(!curse.last().contains("modLoaderType"));

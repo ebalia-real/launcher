@@ -1048,5 +1048,7 @@
   "Copy": "Copier",
   "Live": "En direct",
   "Filter lines…": "Filtrer les lignes…",
-  "The game is not running": "Le jeu n'est pas lancé"
+  "The game is not running": "Le jeu n'est pas lancé",
+  "Already installed": "Déjà installé",
+  "%1 is already installed in this instance.": "%1 est déjà installé dans cette instance."
 }

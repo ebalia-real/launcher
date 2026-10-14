@@ -14,6 +14,8 @@ Entry describe(const QString &instance,const QString &folder,Entry entry,const Q
 // The icon of the Modrinth project a file (mod, pack) belongs to, found by its SHA-1 and kept in cache; null when it is
 // not on Modrinth or has no icon. Network: call off the UI thread.
 QImage modrinthIcon(const QString &file,const QString &cache);
+// The Modrinth project a file belongs to, by its SHA-1, kept in the same cache; empty when Modrinth does not know it.
+QString modrinthProject(const QString &file,const QString &cache);
 // Turns a resource pack on or off in options.txt, as the game's pack screen does; the newest one goes on top.
 void setResourcePack(const QString &instance,const QString &file,bool on);
 // The shader pack Iris or Oculus loads, or empty when shaders are off.

@@ -1048,5 +1048,7 @@
   "Copy": "Copy",
   "Live": "Live",
   "Filter lines…": "Filter lines…",
-  "The game is not running": "The game is not running"
+  "The game is not running": "The game is not running",
+  "Already installed": "Already installed",
+  "%1 is already installed in this instance.": "%1 is already installed in this instance."
 }

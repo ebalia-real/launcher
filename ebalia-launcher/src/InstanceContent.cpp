@@ -81,22 +81,35 @@ QList<InstanceContent::Entry> InstanceContent::list(const QString &instance,cons
     if(folder=="saves")std::stable_sort(out.begin(),out.end(),[](const Entry &a,const Entry &b){return a.modified>b.modified;});
     return out;
 }
-QImage InstanceContent::modrinthIcon(const QString &file,const QString &cache){
-    QImage image;if(cache.isEmpty()||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return image;
-    QFile in(file);QCryptographicHash sha(QCryptographicHash::Sha1);if(!in.open(QIODevice::ReadOnly)||!sha.addData(&in))return image;
-    const auto hash=QString::fromLatin1(sha.result().toHex()),cached=cache+"/"+hash+".png";
-    if(QFile::exists(cached)){image.load(cached);return image;}if(QFile::exists(cached+".none"))return image;
-    QDir().mkpath(cache);auto none=[&]{QFile mark(cached+".none");mark.open(QIODevice::WriteOnly);};
+namespace {
+QString sha1Of(const QString &file){QFile in(file);QCryptographicHash sha(QCryptographicHash::Sha1);if(!in.open(QIODevice::ReadOnly)||!sha.addData(&in))return {};return QString::fromLatin1(sha.result().toHex());}
+// The project of a file with this SHA-1, from Modrinth or the cache: "<hash>.project" holds it, empty when Modrinth
+// does not know the file. A failed connection is not remembered, so the next look asks again.
+QString projectOf(const QString &hash,const QString &cache){
+    const auto cached=cache+"/"+hash+".project";
+    if(QFile known(cached);known.open(QIODevice::ReadOnly))return QString::fromLatin1(known.readAll()).trimmed();
+    if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return {};
+    auto remember=[&](const QString &project){QDir().mkpath(cache);QFile mark(cached);if(mark.open(QIODevice::WriteOnly))mark.write(project.toLatin1());return project;};
     try{
-        const auto version=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"))).object();
-        const auto project=version["project_id"].toString();if(!QRegularExpression("^[A-Za-z0-9]+$").match(project).hasMatch()){none();return {};}
+        const auto project=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"))).object()["project_id"].toString();
+        return remember(QRegularExpression("^[A-Za-z0-9]+$").match(project).hasMatch()?project:QString());
+    }catch(const std::exception &e){if(QString::fromUtf8(e.what()).contains("Not Found",Qt::CaseInsensitive))return remember({});}
+    return {};
+}
+}
+QString InstanceContent::modrinthProject(const QString &file,const QString &cache){
+    if(cache.isEmpty())return {};const auto hash=sha1Of(file);return hash.isEmpty()?QString():projectOf(hash,cache);
+}
+QImage InstanceContent::modrinthIcon(const QString &file,const QString &cache){
+    QImage image;if(cache.isEmpty())return image;
+    const auto hash=sha1Of(file);if(hash.isEmpty())return image;const auto cached=cache+"/"+hash+".png";
+    if(QFile::exists(cached)){image.load(cached);return image;}if(QFile::exists(cached+".none")||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return image;
+    const auto project=projectOf(hash,cache);if(project.isEmpty())return image;
+    try{
         const QUrl icon(QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/project/"+project))).object()["icon_url"].toString());
         if(icon.scheme()=="https"&&image.loadFromData(ModRepository::fetch(icon))){image=image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation);image.save(cached,"PNG");return image;}
-        none(); // on Modrinth, without an icon
-    }catch(const std::exception &e){
-        // Not on Modrinth is remembered; a failed connection is not, so the next look tries again.
-        if(QString::fromUtf8(e.what()).contains("Not Found",Qt::CaseInsensitive))none();
-    }
+        QFile none(cached+".none");none.open(QIODevice::WriteOnly); // on Modrinth, without an icon
+    }catch(...){}
     return {};
 }
 InstanceContent::Entry InstanceContent::describe(const QString &instance,const QString &folder,Entry entry,const QString &iconCache){

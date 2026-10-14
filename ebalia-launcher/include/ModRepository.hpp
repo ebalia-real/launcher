@@ -1,4 +1,5 @@
 #pragma once
+#include <QSet>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -25,6 +26,9 @@ public:
     static QJsonObject read(const QString &path);
     static void write(const QString &path, const QJsonObject &object);
     static bool safeName(const QString &name);
+    // The Discover projects an instance already has, by project id: mods installed by the launcher (mods.json, also
+    // when turned off) and resource or shader packs (packs.json), while their file is still in its folder.
+    static QSet<QString> installedProjects(const QString &instance);
     static QByteArray fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers = {});
     // EBALIA_CURSEFORGE_API_KEY, then Provider settings, then the key built into this copy (empty when none).
     static QString curseForgeKey();

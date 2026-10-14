@@ -170,7 +170,27 @@ QJsonObject ModRepository::installPack(const QString &instance, const QString &p
         if (QCryptographicHash::hash(bytes, QCryptographicHash::Sha1).toHex() != sha1.toLatin1()) fail("Download checksum mismatch: " + filename);
         QSaveFile out(target); if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) fail("No se puede guardar: " + target);
     } else Download::file(source, target, sha1.toLatin1(), QCryptographicHash::Sha1);
+    // Recorded, so Discover knows the pack is installed in this instance.
+    const auto record = instance + "/packs.json";
+    QJsonArray packs; if (QFile::exists(record)) { try { packs = read(record)["packs"].toArray(); } catch (...) {} }
+    for (auto n = packs.size() - 1; n >= 0; --n) if (packs[n].toObject()["project_id"].toString() == projectId) packs.removeAt(n);
+    packs.append(QJsonObject{{"project_id", projectId}, {"kind", kind}, {"filename", filename}, {"title", title}});
+    write(record, QJsonObject{{"packs", packs}});
     return {{"filename", filename}, {"title", title}};
+}
+QSet<QString> ModRepository::installedProjects(const QString &instance) {
+    QSet<QString> ids;
+    auto entries = [](const QString &file, const QString &key) { QJsonArray list; if (QFile::exists(file)) { try { list = read(file)[key].toArray(); } catch (...) {} } return list; };
+    for (const auto &v : entries(instance + "/mods.json", "mods")) {
+        const auto e = v.toObject(); const auto name = e["filename"].toString();
+        if (safeName(name) && (QFile::exists(instance + "/mods/" + name) || QFile::exists(instance + "/mods/" + name + ".disabled"))) ids.insert(e["project_id"].toString());
+    }
+    for (const auto &v : entries(instance + "/packs.json", "packs")) {
+        const auto e = v.toObject(); const auto name = e["filename"].toString();
+        if (safeName(name) && QFile::exists(instance + (e["kind"].toString() == "shader" ? "/shaderpacks/" : "/resourcepacks/") + name)) ids.insert(e["project_id"].toString());
+    }
+    ids.remove(QString());
+    return ids;
 }
 QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString,QString>> &items) {
     QUrl url("https://api.curseforge.com/v1/"+path);QUrlQuery query;for(const auto &item:items)query.addQueryItem(item.first,item.second);url.setQuery(query);

@@ -1,5 +1,9 @@
 # 1.1.9
 
+- Discover says what the instance already has: installed mods, resource packs and shaders show "Already installed"
+  in the list, the Install button says so too, and installing several leaves them out. Packs are recorded when they
+  install; those added by hand or before are recognised through Modrinth. A pack or mod removed from its folder can
+  be installed again.
 - Mod pictures are sharp: the gallery viewer and the mod page's cover show the pictures as uploaded instead of
   Modrinth's 350 pixel previews (the preview shows while the original downloads), and CurseForge's strip uses its
   small previews.

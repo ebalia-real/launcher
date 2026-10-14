@@ -516,13 +516,15 @@ QWidget *MainWindow::buildExplore() {
         gallery->setVisible(gallery->count()>0);};
     auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1400);};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
-    auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");
+    auto install=button(text("Instalar","Install","Instalar"),actions,{},this,true,"download");install->setObjectName("modPreviewInstall");m_installButton=install;
     auto page=button(text("Abrir página","Open page","Abrir página"),actions,{},this,false,"external-link");actions->addStretch();
-    connect(install,&QPushButton::clicked,this,[this]{QJsonArray projects;for(auto item:m_results->selectedItems())projects.append(item->data(Qt::UserRole).toJsonObject());
-        if(projects.isEmpty()&&m_results->currentItem())projects.append(m_results->currentItem()->data(Qt::UserRole).toJsonObject());if(!projects.isEmpty())installProjects(projects);});
-    // The only install button: it installs every selected entry (Ctrl or Shift to choose several) and says how many.
-    connect(m_results,&QListWidget::itemSelectionChanged,install,[this,install]{const auto n=m_results->selectedItems().size();
-        install->setText(" "+(n>1?text("Instalar (%1)","Install (%1)","Instalar (%1)").arg(n):text("Instalar","Install","Instalar")));});
+    // The only install button: it installs every selected entry (Ctrl or Shift to choose several) that the instance does
+    // not have yet, and says how many.
+    connect(install,&QPushButton::clicked,this,[this]{auto items=m_results->selectedItems();if(items.isEmpty()&&m_results->currentItem())items<<m_results->currentItem();
+        QJsonArray projects;for(auto item:items)if(!item->data(Qt::UserRole+1).toBool()&&!item->data(Qt::UserRole).toJsonObject().isEmpty())projects.append(item->data(Qt::UserRole).toJsonObject());
+        if(!projects.isEmpty())installProjects(projects);});
+    connect(m_results,&QListWidget::itemSelectionChanged,install,[this]{updateInstallButton();});
+    connect(m_results,&QListWidget::currentItemChanged,install,[this]{updateInstallButton();});
     connect(page,&QPushButton::clicked,this,[page]{const QUrl url(page->property("url").toString());if(url.scheme()=="https")QDesktopServices::openUrl(url);});
     connect(m_results,&QListWidget::currentItemChanged,this,[this,panel,cover,logo,title,meta,bodyView,page,showGallery](QListWidgetItem *item){
         // The panel never hides, so the list keeps its width and a double-click stays on the same mod.
@@ -551,7 +553,9 @@ QWidget *MainWindow::buildExplore() {
     // The logo follows the mod's icon once it has downloaded.
     connect(m_results->model(),&QAbstractItemModel::dataChanged,logo,[this,logo](const QModelIndex &from,const QModelIndex &to){if(auto c=m_results->currentItem();c&&m_results->row(c)>=from.row()&&m_results->row(c)<=to.row())logo->setPixmap(c->icon().pixmap(56,56));});
     // Double-click installs the mod (with its dependencies) right away.
-    connect(m_results,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){installModNow(item->data(Qt::UserRole).toJsonObject());});
+    connect(m_results,&QListWidget::itemDoubleClicked,this,[this](QListWidgetItem *item){
+        if(item->data(Qt::UserRole+1).toBool()){m_status->setText(text("%1 ya está instalado en esta instancia.","%1 is already installed in this instance.","%1 já está instalado nesta instância.").arg(item->data(Qt::UserRole).toJsonObject()["title"].toString()));return;}
+        installModNow(item->data(Qt::UserRole).toJsonObject());});
     // Like Prism Launcher: reaching the end of the list loads the next results.
     connect(m_results->verticalScrollBar(),&QScrollBar::valueChanged,this,[this](int value){
         auto bar=m_results->verticalScrollBar();
@@ -848,6 +852,37 @@ void MainWindow::showPage(int i) {
     // The mod list loads when the tab opens: popular mods for the selected instance until something is searched.
     if(i==Explore&&m_target&&!m_selectedDir.isEmpty()){const int index=m_target->findData(m_selectedDir);if(index>=0&&index!=m_target->currentIndex()){m_target->setCurrentIndex(index);m_results->clear();}}
     if(i==Explore&&m_results&&m_results->count()==0&&!m_target->currentData().toString().isEmpty())searchMods();
+    else if(i==Explore)markInstalled(); // mods or packs may have been removed meanwhile
+}
+void MainWindow::markInstalled(){
+    if(!m_results||!m_target)return;const auto dir=m_target->currentData().toString();
+    showInstalled(ModRepository::installedProjects(dir));
+    // Packs the launcher has no record of (added by hand, or before it kept one): Modrinth knows them by their file.
+    if(dir.isEmpty()||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;
+    auto watcher=new QFutureWatcher<QSet<QString>>(this);
+    connect(watcher,&QFutureWatcher<QSet<QString>>::finished,this,[this,watcher,dir]{const auto found=watcher->result();watcher->deleteLater();
+        if(!found.isEmpty()&&m_target&&m_target->currentData().toString()==dir)showInstalled(ModRepository::installedProjects(dir)+found);});
+    watcher->setFuture(QtConcurrent::run([dir,cache=m_mc->mcDir()+"/cache/mod-icons"]{
+        QSet<QString> ids;for(const QString folder:{"resourcepacks","shaderpacks"})for(const auto &file:QDir(dir+"/"+folder).entryList({"*.zip"},QDir::Files))
+            if(const auto id=InstanceContent::modrinthProject(dir+"/"+folder+"/"+file,cache);!id.isEmpty())ids.insert(id);
+        return ids;}));
+}
+void MainWindow::showInstalled(const QSet<QString> &installed){
+    for(int n=0;n<m_results->count();++n){
+        auto item=m_results->item(n);const auto p=item->data(Qt::UserRole).toJsonObject();if(p.isEmpty())continue;
+        const bool has=installed.contains(p["project_id"].toString());const auto name=p["title"].toString()+"  ·  "+p["author"].toString();
+        item->setText((has?"✓  "+name+"  ·  "+text("Ya instalado","Already installed","Já instalado"):name)+"\n"+p["description"].toString());item->setData(Qt::UserRole+1,has);
+    }
+    updateInstallButton();
+}
+void MainWindow::updateInstallButton(){
+    if(!m_installButton)return;
+    auto items=m_results->selectedItems();if(items.isEmpty()&&m_results->currentItem())items<<m_results->currentItem();
+    int pending=0,have=0;for(auto item:items){if(item->data(Qt::UserRole).toJsonObject().isEmpty())continue;(item->data(Qt::UserRole+1).toBool()?have:pending)++;}
+    // Everything chosen is already there: the button says so instead of offering to install it again.
+    const bool done=pending==0&&have>0;m_installButton->setEnabled(pending>0||items.isEmpty());
+    m_installButton->setIcon(Ui::icon(done?"check":"download",Qt::white));
+    m_installButton->setText(" "+(done?text("Ya instalado","Already installed","Já instalado"):pending>1?text("Instalar (%1)","Install (%1)","Instalar (%1)").arg(pending):text("Instalar","Install","Instalar")));
 }
 void MainWindow::setLauncherUpdate(LauncherUpdate state,const QString &version){
     m_launcherUpdate=state;if(!version.isEmpty())m_launcherVersion=version;
@@ -1443,7 +1478,7 @@ void MainWindow::searchMods(int offset){
             const auto url=p["icon_url"].toString();
             loadImage(url,[list=QPointer<QListWidget>(m_results),url](const QPixmap &icon){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toJsonObject()["icon_url"].toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(icon,QSize(88,88),14)));});
         }
-        if(offset==0&&m_results->count()>0)m_results->setCurrentRow(0);
+        markInstalled();if(offset==0&&m_results->count()>0)m_results->setCurrentRow(0);
         if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));};
     if(offset==0){work(Language::key("Searching provider…"),job,show);return;}
     // Further pages load quietly at the end of the list, without a progress bar.
@@ -1494,7 +1529,7 @@ void MainWindow::installProjects(const QJsonArray &projects,QString kind){
             if(plan["versions"].toArray().isEmpty()&&!missing.isEmpty())throw std::runtime_error(missing.first().toObject()["reason"].toString().toStdString());
             repo.apply(dir,plan);return QJsonObject{{"count",plan["versions"].toArray().size()},{"missing",missing}};
         },[this,label](QJsonObject r){
-            refreshInstances();const int count=r["count"].toInt();
+            refreshInstances();markInstalled();const int count=r["count"].toInt();
             m_status->setText(count<=1?text("%1 instalado.","%1 installed.","%1 instalado.").arg(label):text("%1 instalado (%2 archivos con sus dependencias).","%1 installed (%2 files with its dependencies).","%1 instalado (%2 arquivos com dependências).").arg(label).arg(count));
             // Some of several mods had no version for this game: the others are installed, these are listed.
             if(const auto missing=r["missing"].toArray();!missing.isEmpty()){QStringList lines;for(const auto &m:missing)lines<<"• "+m.toObject()["name"].toString()+": "+Language::message(m.toObject()["reason"].toString());
@@ -1507,7 +1542,7 @@ void MainWindow::installProjects(const QJsonArray &projects,QString kind){
         ModRepository repo(root);QJsonArray files;for(const auto &v:projects)files.append(repo.installPack(dir,v.toObject()["project_id"].toString(),game,kind)["filename"]);
         return QJsonObject{{"files",files}};
     },[this,label,kind,dir,loader](QJsonObject){
-        refreshInstances();
+        refreshInstances();markInstalled();
         if(kind!="shader"){m_status->setText(text("%1 instalado. Activalo en el juego: Opciones › Paquetes de recursos.","%1 installed. Turn it on in the game: Options › Resource Packs.","%1 instalado. Ative no jogo: Opções › Pacotes de recursos.").arg(label));return;}
         m_status->setText(text("%1 instalado. Elegilo en el juego: Opciones › Video › Shaders.","%1 installed. Choose it in the game: Options › Video Settings › Shader Packs.","%1 instalado. Escolha no jogo: Opções › Vídeo › Shaders.").arg(label));
         // Shaders need Iris (Fabric, Quilt, NeoForge) or Oculus (Forge): offer it when the instance has neither.

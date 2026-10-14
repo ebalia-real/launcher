@@ -103,6 +103,10 @@ private:
     void installModNow(const QJsonObject &project);
     // Installs the chosen projects of the Discover kind: mods with their dependencies, or resource / shader packs.
     void installProjects(const QJsonArray &projects,QString kind={});
+    // Discover: the results the target instance already has say "Installed", and Install leaves them out.
+    void markInstalled();
+    void showInstalled(const QSet<QString> &projects);
+    void updateInstallButton();
     // Account pictures: the head of the skin each account wears (Microsoft) or gets by default (no premium).
     // Once per account and session unless force.
     void refreshAvatars(bool force=false);
@@ -136,7 +140,7 @@ private:
     QLabel *m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
     QProgressBar *m_progress=nullptr;
     QSet<QString> m_avatarsDone;
-    QComboBox *m_target=nullptr,*m_modProvider=nullptr,*m_modKind=nullptr;
+    QComboBox *m_target=nullptr,*m_modProvider=nullptr,*m_modKind=nullptr;QPushButton *m_installButton=nullptr;
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
     QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;QToolButton *m_lostLog=nullptr;

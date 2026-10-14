@@ -1048,5 +1048,7 @@
   "Copy": "コピー",
   "Live": "ライブ",
   "Filter lines…": "行を絞り込む…",
-  "The game is not running": "ゲームは起動していません"
+  "The game is not running": "ゲームは起動していません",
+  "Already installed": "インストール済み",
+  "%1 is already installed in this instance.": "%1 はこのインスタンスにインストール済みです。"
 }

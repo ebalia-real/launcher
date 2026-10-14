@@ -1048,5 +1048,7 @@
   "Copy": "Копировать",
   "Live": "В реальном времени",
   "Filter lines…": "Фильтр строк…",
-  "The game is not running": "Игра не запущена"
+  "The game is not running": "Игра не запущена",
+  "Already installed": "Уже установлено",
+  "%1 is already installed in this instance.": "%1 уже установлен в этой сборке."
 }

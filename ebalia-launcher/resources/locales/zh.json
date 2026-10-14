@@ -1048,5 +1048,7 @@
   "Copy": "复制",
   "Live": "实时",
   "Filter lines…": "筛选行…",
-  "The game is not running": "游戏未运行"
+  "The game is not running": "游戏未运行",
+  "Already installed": "已安装",
+  "%1 is already installed in this instance.": "%1 已安装在此实例中。"
 }

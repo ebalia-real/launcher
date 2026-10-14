@@ -1048,5 +1048,7 @@
   "Copy": "복사",
   "Live": "실시간",
   "Filter lines…": "줄 필터…",
-  "The game is not running": "게임이 실행 중이 아닙니다"
+  "The game is not running": "게임이 실행 중이 아닙니다",
+  "Already installed": "설치됨",
+  "%1 is already installed in this instance.": "%1은(는) 이 인스턴스에 이미 설치되어 있습니다."
 }
