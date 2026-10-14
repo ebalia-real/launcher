@@ -995,7 +995,6 @@
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "Bedrock se está abriendo… Si Minecraft Linux pide aprobar tus credenciales de Google, aceptá en su ventana.",
   "Close Minecraft Linux first.": "Primero cerrá Minecraft Linux.",
   "Close Minecraft Linux before playing from EBALIA.": "Cerrá Minecraft Linux antes de jugar desde EBALIA.",
-  "DOWNLOAD": "DESCARGAR",
   "Install (%1)": "Instalar (%1)",
   "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "Esta instancia no tiene cargador de mods. Elegí una con Fabric, Quilt, Forge o NeoForge, o buscá paquetes de recursos.",
   "%1 projects": "%1 proyectos",
@@ -1045,5 +1044,9 @@
   "Could not delete the skin.": "No se pudo eliminar la skin.",
   "Guide": "Guía",
   "Mute Silence": "Silenciar a Silence",
-  "Turn Silence's sounds on": "Activar los sonidos de Silence"
+  "Turn Silence's sounds on": "Activar los sonidos de Silence",
+  "Copy": "Copiar",
+  "Live": "En vivo",
+  "Filter lines…": "Filtrar líneas…",
+  "The game is not running": "El juego no está abierto"
 }

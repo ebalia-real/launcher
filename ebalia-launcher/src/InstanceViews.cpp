@@ -179,11 +179,6 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
         auto links=new QHBoxLayout;links->setSpacing(14);cl->addLayout(links);
         auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);links->addWidget(action);
         connect(action,&QPushButton::clicked,this,open);
-        // Resource and shader packs from CurseForge and Modrinth, straight from their card.
-        if(folder=="resourcepacks"||folder=="shaderpacks"){
-            auto get=new QPushButton(t("DOWNLOAD"));get->setObjectName(folder=="resourcepacks"?"downloadResourcePacks":"downloadShaderPacks");get->setProperty("link",true);get->setCursor(Qt::PointingHandCursor);links->addWidget(get);
-            connect(get,&QPushButton::clicked,this,[this,folder]{if(download)download(folder=="resourcepacks"?"resourcepack":"shader");});
-        }
         links->addStretch();
     }
     auto actions=new QHBoxLayout;actions->setSpacing(8);l->addLayout(actions);

@@ -1,3 +1,22 @@
+# 1.1.9
+
+- Mod pictures are sharp: the gallery viewer and the mod page's cover show the pictures as uploaded instead of
+  Modrinth's 350 pixel previews (the preview shows while the original downloads), and CurseForge's strip uses its
+  small previews.
+- The lists that drop down (Mods, Resource packs, Shader packs and every other choice) open under their box with a
+  single border; on Windows parts of the list were drawn outside it.
+- The Resource packs and Shader packs cards have one link, like Mods: their window has the Download button.
+- Shader packs, and resource packs without a picture, show their Modrinth project's icon (found by the file and kept
+  in cache). The Use this shader and Turn on buttons keep the same space between icon and text as the others.
+- Live log: the log window shows the game's output as it is written, follows it unless you scroll up, colours errors
+  red and warnings yellow, filters lines, copies everything and no longer blocks the launcher behind it. Lost versions
+  have a log button too.
+- Lost versions: Uninstall sits with Play and Reinstall whenever the version is installed.
+- Downloads show their percentage (and the size in the tooltip): lost versions and their Java, and instance installs
+  next to what is being done.
+- Bedrock looks for the game once, and again only after something done from the launcher (installing, updating,
+  uninstalling, opening the Store or Minecraft Linux) or Check again, instead of every time the page opens.
+
 # 1.1.8
 
 - Fixed: the Install and Open page buttons of the mod page closed the launcher on every system (and so could the

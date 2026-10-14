@@ -453,6 +453,16 @@ private slots:
         InstanceContent::remove(dir,"saves","My World");QCOMPARE(InstanceContent::list(dir,"saves").size(),2);QCOMPARE(QDir(dir+"/removed-worlds").entryList(QDir::Dirs|QDir::NoDotAndDotDot).size(),1);
         QVERIFY(QDir(dir).entryList({".import-*"},QDir::Dirs|QDir::Hidden).isEmpty());
     }
+    void galleryOriginals(){
+        // A mod page's gallery: Modrinth's 350 pixel previews for the strip, the pictures as uploaded for the viewer.
+        QTemporaryDir t;ModRepository repo(t.path(),[](const QUrl &url)->QByteArray{
+            if(url.path().endsWith("/project/abc"))return R"({"body":"Hi","project_type":"resourcepack","slug":"abc","downloads":5,"gallery":[{"url":"https://cdn.modrinth.com/data/abc/images/x_350.webp","raw_url":"https://cdn.modrinth.com/data/abc/images/x.png"},{"url":"https://cdn.modrinth.com/data/abc/images/y_350.webp","raw_url":""}]})";
+            throw std::runtime_error("unexpected "+url.toString().toStdString());});
+        const auto page=repo.details("abc");const auto previews=page["gallery"].toArray(),full=page["galleryFull"].toArray();
+        QCOMPARE(previews.size(),2);QCOMPARE(previews[0].toString(),QString("https://cdn.modrinth.com/data/abc/images/x_350.webp"));
+        QCOMPARE(full[0].toString(),QString("https://cdn.modrinth.com/data/abc/images/x.png"));QCOMPARE(full[1].toString(),previews[1].toString());
+        QCOMPARE(page["url"].toString(),QString("https://modrinth.com/resourcepack/abc"));
+    }
     void skinLibraryRemove(){
         // Deleting a skin removes the library's copy, never the PNG it came from; only library names are accepted.
         QTemporaryDir t;QImage image(64,64,QImage::Format_ARGB32);image.fill(Qt::red);const auto png=t.path()+"/in.png";QVERIFY(image.save(png));

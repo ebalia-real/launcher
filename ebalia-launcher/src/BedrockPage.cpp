@@ -199,8 +199,9 @@ BedrockPage::BedrockPage(const QString &dataRoot, QWidget *parent) : QWidget(par
         });
         watcher->setFuture(QtConcurrent::run([work]{try{return work();}catch(const std::exception &e){return QString("ERROR: ")+QString::fromUtf8(e.what());}}));
     };
-    connect(install,&QPushButton::clicked,this,[=] {
+    connect(install,&QPushButton::clicked,this,[=,this] {
         if(windows){
+            m_stale=true;
             // The Store pages of Minecraft for Windows and of Gaming Services; the web page if the Store app is missing.
             const bool services=!found->windows.release.isEmpty()||!found->windows.preview.isEmpty();
             if(!QDesktopServices::openUrl(QUrl(services?"ms-windows-store://pdp/?ProductId=9MWPM2CQNLHN":"ms-windows-store://pdp/?ProductId=9NBLGGH2JHXJ")))
@@ -208,10 +209,11 @@ BedrockPage::BedrockPage(const QString &dataRoot, QWidget *parent) : QWidget(par
             return;
         }
         job(tr("Instalando Bedrock… Puede tardar unos minutos.","Installing Bedrock… This can take a few minutes."),[root]{BedrockInstaller::install(root);return QString();},
-            [=](const QString &){if(BedrockInstaller::openManager())status->setText(tr("Se abrió Minecraft Linux: iniciá sesión con Google, descargá una versión y cerrá esa ventana. Después pulsá Comprobar de nuevo.",
+            [=,this](const QString &){m_stale=true;if(BedrockInstaller::openManager())status->setText(tr("Se abrió Minecraft Linux: iniciá sesión con Google, descargá una versión y cerrá esa ventana. Después pulsá Comprobar de nuevo.",
                 "Minecraft Linux opened: sign in with Google, download the version and close that window. Then press Check again."));});
     });
-    connect(manager,&QPushButton::clicked,this,[=] {
+    connect(manager,&QPushButton::clicked,this,[=,this] {
+        m_stale=true;
         if(windows){QDesktopServices::openUrl(QUrl("msxbox://game/?productId=9NBLGGH2JHXJ"));return;}
         // Only Minecraft Linux's own window signs in to Google Play and checks the purchase.
         status->setText(BedrockInstaller::openManager()
@@ -290,5 +292,6 @@ BedrockPage::~BedrockPage() {for(auto child:findChildren<QObject*>())child->disc
 
 void BedrockPage::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
-    refresh();
+    if(m_checked&&!m_stale)return;
+    m_checked=true;m_stale=false;refresh();
 }

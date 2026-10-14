@@ -995,7 +995,6 @@
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "基岩版正在启动…如果 Minecraft Linux 请你批准 Google 凭据，请在它的窗口中同意。",
   "Close Minecraft Linux first.": "请先关闭 Minecraft Linux。",
   "Close Minecraft Linux before playing from EBALIA.": "从 EBALIA 游玩前请先关闭 Minecraft Linux。",
-  "DOWNLOAD": "下载",
   "Install (%1)": "安装 (%1)",
   "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "此实例没有模组加载器。请选择使用 Fabric、Quilt、Forge 或 NeoForge 的实例，或搜索资源包。",
   "%1 projects": "%1 个项目",
@@ -1045,5 +1044,9 @@
   "Could not delete the skin.": "无法删除皮肤。",
   "Guide": "指南",
   "Mute Silence": "将 Silence 静音",
-  "Turn Silence's sounds on": "开启 Silence 的音效"
+  "Turn Silence's sounds on": "开启 Silence 的音效",
+  "Copy": "复制",
+  "Live": "实时",
+  "Filter lines…": "筛选行…",
+  "The game is not running": "游戏未运行"
 }

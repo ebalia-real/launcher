@@ -35,8 +35,6 @@ public:
     QString dir() const {return m_dir;}
     std::function<void()> back,play,settings,log,exportZip,copy,remove,mods,findMods,savePack,changeGroup,changeBackground;
     std::function<void(const QString &folder)> openFolder;
-    // Discover for this instance on "resourcepack" or "shader".
-    std::function<void(const QString &kind)> download;
     // The window of resourcepacks, shaderpacks or saves, like the mods one.
     std::function<void(const QString &folder)> manage;
     std::function<void(const QString &key,const QImage &custom)> changeIcon;

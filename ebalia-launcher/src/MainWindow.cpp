@@ -26,6 +26,7 @@
 #include "InstanceViews.hpp"
 #include "InstanceContent.hpp"
 #include "TitleBar.hpp"
+#include "LogWindow.hpp"
 #include "InstanceIcons.hpp"
 #include "Icons.hpp"
 #include "Ui.hpp"
@@ -40,6 +41,8 @@
 #include <QCryptographicHash>
 #include <stdexcept>
 #include <algorithm>
+#include <atomic>
+#include <memory>
 using Language::text;
 namespace {
 QString k(const char *source){return Language::key(QString::fromUtf8(source));}
@@ -248,8 +251,9 @@ private:
 // A mod's pictures, one at a time and as large as the window allows, with the previous / next buttons and arrow keys.
 class ModGallery:public QDialog {
 public:
-    ModGallery(const QString &title,const QStringList &urls,int start,std::function<void(const QString &,std::function<void(const QPixmap &)>)> fetch,QWidget *parent)
-        :QDialog(parent),m_urls(urls),m_index(start),m_fetch(std::move(fetch)) {
+    // Each picture shows its small preview at once and is replaced by the original when that has downloaded.
+    ModGallery(const QString &title,const QStringList &previews,const QStringList &urls,int start,std::function<void(const QString &,std::function<void(const QPixmap &)>)> fetch,QWidget *parent)
+        :QDialog(parent),m_previews(previews),m_urls(urls),m_index(start),m_fetch(std::move(fetch)) {
         setObjectName("modGalleryViewer");setWindowTitle(title);resize(1000,640);
         auto layout=new QVBoxLayout(this);layout->setContentsMargins(14,14,14,12);layout->setSpacing(10);
         m_picture=new QLabel;m_picture->setAlignment(Qt::AlignCenter);m_picture->setMinimumSize(320,200);m_picture->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Ignored);layout->addWidget(m_picture,1);
@@ -270,11 +274,13 @@ private:
     void go(int index) {
         if(m_urls.isEmpty())return;m_index=(index+int(m_urls.size()))%int(m_urls.size());
         m_counter->setText(QString("%1 / %2").arg(m_index+1).arg(m_urls.size()));m_previous->setEnabled(m_urls.size()>1);m_next->setEnabled(m_urls.size()>1);
-        m_image={};m_picture->setText("…");const int wanted=m_index;QPointer<ModGallery> self(this);
-        m_fetch(m_urls[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted){self->m_image=image;self->fit();}});
+        m_image={};m_sharp=false;m_picture->setText("…");const int wanted=m_index;QPointer<ModGallery> self(this);
+        if(wanted<m_previews.size()&&m_previews[wanted]!=m_urls[wanted])
+            m_fetch(m_previews[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted&&!self->m_sharp){self->m_image=image;self->fit();}});
+        m_fetch(m_urls[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted){self->m_image=image;self->m_sharp=true;self->fit();}});
     }
     void fit() {if(!m_image.isNull())m_picture->setPixmap(m_image.scaled(m_picture->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation));}
-    QStringList m_urls;int m_index=0;QPixmap m_image;std::function<void(const QString &,std::function<void(const QPixmap &)>)> m_fetch;
+    QStringList m_previews,m_urls;int m_index=0;QPixmap m_image;bool m_sharp=false;std::function<void(const QString &,std::function<void(const QPixmap &)>)> m_fetch;
     QLabel *m_picture=nullptr,*m_counter=nullptr;QPushButton *m_previous=nullptr,*m_next=nullptr;
 };
 class WheelGuard:public QObject {
@@ -324,7 +330,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     build();setWindowTitle("EBALIA Launcher");TitleBar::install(this);setMinimumSize(640,480);Ui::fitToScreen(this,{1280,800});
     connect(m_mc,&McInstanceManager::manifestReady,this,[this](const QList<McVersion> &v){m_manifest=v;m_catalog->setText(text("Catálogo actualizado · ","Catalog updated · ","Catálogo atualizado · ")+QString::number(v.size())+text(" versiones"," versions"," versões"));});
     connect(m_mc,&McInstanceManager::manifestFailed,this,[this](const QString &e){m_catalog->setText(Language::message(e));});
-    connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
+    connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage)+(p>0&&p<=100?"  ·  "+QString::number(p)+"%":QString()));});
     connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);if(ok)InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();refreshAvatars(true);});const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
     connect(m_mc,&McInstanceManager::gameStarted,this,[this](const QString &){refreshInstances();m_status->setText(text("Minecraft en ejecución","Minecraft is running","Minecraft em execução"));});
     connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code)showCrash(dir);});
@@ -453,14 +459,13 @@ QWidget *MainWindow::buildInstances() {
     m_grid->newGroup=[this]{bool ok;auto name=QInputDialog::getText(this,Language::key("New group"),Language::key("Group name"),QLineEdit::Normal,{},&ok).trimmed();if(!ok||name.isEmpty())return;auto groups=QSettings().value("ui/groups").toStringList();if(!groups.contains(name))groups<<name;QSettings().setValue("ui/groups",groups);refreshInstances();};
     m_grid->groupMenu=[this](const QString &group){groupMenu(group);};
     m_detail->back=[this]{m_library->setCurrentWidget(m_grid);refreshInstances();};
-    m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{showLog(selected().dir,this);};
+    m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{const auto i=selected();showLog(i.dir,i.name,[this,dir=i.dir]{return m_mc->isRunning(dir);});};
     m_detail->changeIcon=[this](const QString &key,const QImage &custom){setInstanceIcon(m_detail->dir(),key,custom);refreshInstances();};
     m_detail->changeBackground=[this]{changeBackground(m_detail->dir());};
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
     m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
     m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));};
     m_detail->manage=[this](const QString &folder){manageContent(folder);};
-    m_detail->download=[this](const QString &kind){auto i=selected();if(!i.dir.isEmpty())discover(kind,i.dir);};
     m_detail->openFolder=[this](const QString &folder){auto i=selected();if(i.dir.isEmpty())return;auto path=folder.isEmpty()?i.dir:i.dir+"/"+folder;QDir().mkpath(path);QDesktopServices::openUrl(QUrl::fromLocalFile(path));};
     auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_library);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
     return m_library;
@@ -497,13 +502,15 @@ QWidget *MainWindow::buildExplore() {
     auto gallery=new QListWidget;gallery->setObjectName("modGallery");gallery->setViewMode(QListView::IconMode);gallery->setFlow(QListView::LeftToRight);gallery->setWrapping(false);
     gallery->setMovement(QListView::Static);gallery->setIconSize(QSize(128,72));gallery->setSpacing(4);gallery->setFixedHeight(98);gallery->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     gallery->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);gallery->setFrameShape(QFrame::NoFrame);gallery->setStyleSheet("QListWidget#modGallery{background:transparent;border:0;padding:0}QListWidget#modGallery::item{border-radius:6px;padding:2px}");gallery->setCursor(Qt::PointingHandCursor);gallery->hide();galleryRow->addWidget(gallery);
-    auto openGallery=[this,gallery,title](int start){QStringList urls;for(int n=0;n<gallery->count();++n)urls<<gallery->item(n)->data(Qt::UserRole).toString();if(urls.isEmpty())return;
-        ModGallery viewer(title->text(),urls,start,[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1920);},this);Ui::openWindow(viewer);};
+    auto openGallery=[this,gallery,title](int start){QStringList previews,urls;for(int n=0;n<gallery->count();++n){previews<<gallery->item(n)->data(Qt::UserRole).toString();urls<<gallery->item(n)->data(Qt::UserRole+1).toString();}if(urls.isEmpty())return;
+        ModGallery viewer(title->text(),previews,urls,start,[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1920,true);},this);Ui::openWindow(viewer);};
     connect(gallery,&QListWidget::itemClicked,this,[gallery,openGallery](QListWidgetItem *item){openGallery(gallery->row(item));});
     cover->clicked=[openGallery]{openGallery(0);};
-    auto showGallery=[this,gallery](const QJsonArray &urls,const QString &id){
+    // Previews in the strip; the original of each picture (when the page gave it) for the viewer.
+    auto showGallery=[this,gallery](const QJsonArray &urls,const QString &id,const QJsonArray &full={}){
         gallery->clear();gallery->setVisible(!urls.isEmpty());
-        for(const auto &v:urls){const auto url=v.toString();if(!url.startsWith("https://"))continue;auto item=new QListWidgetItem(gallery);item->setData(Qt::UserRole,url);item->setSizeHint(QSize(136,80));
+        for(int n=0;n<urls.size();++n){const auto url=urls[n].toString();if(!url.startsWith("https://"))continue;const auto original=full.at(n).toString();
+            auto item=new QListWidgetItem(gallery);item->setData(Qt::UserRole,url);item->setData(Qt::UserRole+1,original.startsWith("https://")?original:url);item->setSizeHint(QSize(136,80));
             loadImage(url,[this,gallery,url,id](const QPixmap &image){auto c=m_results->currentItem();if(!c||c->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id)return;
                 for(int n=0;n<gallery->count();++n)if(gallery->item(n)->data(Qt::UserRole).toString()==url)gallery->item(n)->setIcon(QIcon(Ui::cover(image,QSize(128,72),6)));},640);}
         gallery->setVisible(gallery->count()>0);};
@@ -533,7 +540,11 @@ QWidget *MainWindow::buildExplore() {
             const auto d=watcher->result();watcher->deleteLater();auto current=m_results->currentItem();if(!current||current->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id||d.isEmpty())return;
             const auto body=d["body"].toString();if(!body.isEmpty())bodyView->showPage(body);
             if(!d["url"].toString().isEmpty())page->setProperty("url",d["url"].toString());
-            const auto gallery=d["gallery"].toArray();if(!gallery.isEmpty())showGallery(gallery,id);if(cover->isHidden()&&!gallery.isEmpty())loadImage(gallery.first().toString(),[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);
+            // The cover first showed the small preview from the search; the original replaces it.
+            const auto gallery=d["gallery"].toArray(),full=d["galleryFull"].toArray();if(!gallery.isEmpty())showGallery(gallery,id,full);
+            // Only for a mod the person stays on: going down the list does not download every original.
+            const auto art=!full.isEmpty()?full.first().toString():!gallery.isEmpty()?gallery.first().toString():QString();
+            if(!art.isEmpty())QTimer::singleShot(1200,cover,[this,cover,id,art]{if(auto c=m_results->currentItem();!c||c->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id)return;loadImage(art,[this,cover,id](const QPixmap &image){if(auto c=m_results->currentItem();c&&c->data(Qt::UserRole).toJsonObject()["project_id"].toString()==id)cover->setImage(image);},1400);});
         });
         watcher->setFuture(QtConcurrent::run([root,id]{try{return ModRepository(root).details(id);}catch(...){return QJsonObject{};}}));
     });
@@ -567,9 +578,12 @@ QWidget *MainWindow::buildLost() {
     m_lostInstall=button({},actions,[this]{lostAction(false);},this);m_lostInstall->setObjectName("lostInstall");m_lostInstall->setProperty("secondary",true);m_lostInstall->setMinimumSize(110,48);m_lostInstall->setIcon(Ui::icon("download",Qt::white));m_lostInstall->setIconSize(QSize(18,18));
     auto folder=new QToolButton;folder->setIcon(Ui::icon("folder"));folder->setIconSize(QSize(20,20));folder->setToolTip(k("Open instance folder"));folder->setAccessibleName(folder->toolTip());folder->setCursor(Qt::PointingHandCursor);actions->addWidget(folder);
     connect(folder,&QToolButton::clicked,this,[this]{auto id=filename(m_lost);for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v))QDesktopServices::openUrl(QUrl::fromLocalFile(m_versions->getInstallPath(v)));});
+    // The game's log, live while it runs.
+    m_lostLog=new QToolButton;m_lostLog->setObjectName("lostLog");m_lostLog->setIcon(Ui::icon("file-text"));m_lostLog->setIconSize(QSize(20,20));m_lostLog->setToolTip(text("Registro","Log","Registro"));m_lostLog->setAccessibleName(m_lostLog->toolTip());m_lostLog->setCursor(Qt::PointingHandCursor);actions->addWidget(m_lostLog);
+    connect(m_lostLog,&QToolButton::clicked,this,[this]{auto id=filename(m_lost);for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v))showLog(m_versions->getInstallPath(v),v.name,[this]{return m_java->isRunning();});});
     actions->addStretch();
-    auto maintenance=new QHBoxLayout;maintenance->setContentsMargins(16,0,16,12);dl->addLayout(maintenance);
-    m_lostUninstall=button(text("Desinstalar","Uninstall","Desinstalar"),maintenance,[this] {
+    // Uninstall sits with Play and Install, at the end of the row, whenever the version is installed.
+    m_lostUninstall=button(text("Desinstalar","Uninstall","Desinstalar").toUpper(),actions,[this] {
         if(m_jobs||m_java->isRunning())return;
         const auto id=filename(m_lost);
         for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v)) {
@@ -589,7 +603,7 @@ QWidget *MainWindow::buildLost() {
             },[this](QJsonObject){refreshLost();m_status->setText(text("Versión desinstalada · archivos en la papelera","Version uninstalled · files in trash","Versão desinstalada · arquivos na lixeira"));});
             return;
         }
-    },this,false,"trash-2");m_lostUninstall->setObjectName("lostUninstall");maintenance->addStretch();
+    },this,false,"trash-2");m_lostUninstall->setObjectName("lostUninstall");m_lostUninstall->setProperty("danger",true);m_lostUninstall->setMinimumHeight(48);
     connect(m_lost,&QListWidget::currentRowChanged,this,[this]{lostSelection();});
     label(text("Los paquetes de Windows necesitan Windows o Wine. La disponibilidad depende del archivo original.","Windows packages require Windows or Wine. Availability depends on the original archive.","Pacotes do Windows precisam de Windows ou Wine. A disponibilidade depende do arquivo original."),l,"muted");
     return s.widget;
@@ -949,7 +963,7 @@ void MainWindow::lostSelection(){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;
     auto cover=static_cast<Cover*>(m_lostImage);cover->setArtwork(Ui::lostArtFor(v.id,v.category));
     const bool running=m_java->isRunning();
-    m_lostUninstall->setVisible(!v.id.isEmpty()&&m_versions->isVersionInstalled(v));m_lostUninstall->setEnabled(!running&&!m_jobs);
+    const bool present=!v.id.isEmpty()&&m_versions->isVersionInstalled(v);m_lostUninstall->setVisible(present);m_lostUninstall->setEnabled(!running&&!m_jobs);m_lostLog->setVisible(present);
     m_lostPlay->setText("  "+(running?k("Stop"):k("Play")).toUpper());m_lostPlay->setIcon(Ui::icon(running?"square":"play",Qt::white));m_lostPlay->setProperty("danger",running);m_lostPlay->setProperty("play",!running);m_lostPlay->style()->unpolish(m_lostPlay);m_lostPlay->style()->polish(m_lostPlay);
     m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
     const bool installed=m_versions->isVersionInstalled(v);m_lostTitle->setText(v.name);
@@ -960,14 +974,30 @@ void MainWindow::lostSelection(){
     m_lostInfo->setText(info.join("\n\n"));m_lostInstall->setText("  "+(installed?Language::key("Reinstall"):text("Instalar","Install","Instalar")).toUpper());m_lostPlay->setEnabled(installed||running);
 }
 void MainWindow::work(const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){
+    measuredWork(title,[job](const Report &){return job();},std::move(done));
+}
+void MainWindow::measuredWork(const QString &title,std::function<QJsonObject(const Report &)> job,std::function<void(QJsonObject)> done){
     if(m_jobs)return;++m_jobs;lostSelection();
-    auto task=new QWidget(this);task->setObjectName("backgroundTaskProgress");task->setMaximumWidth(300);
+    auto task=new QWidget(this);task->setObjectName("backgroundTaskProgress");task->setMaximumWidth(320);
     auto layout=new QVBoxLayout(task);layout->setContentsMargins(8,4,8,4);layout->setSpacing(4);
-    auto caption=new QLabel(title,task);caption->setWordWrap(true);caption->setTextFormat(Qt::PlainText);caption->setToolTip(title);layout->addWidget(caption);
+    auto head=new QHBoxLayout;head->setSpacing(8);layout->addLayout(head);
+    auto caption=new QLabel(title,task);caption->setWordWrap(true);caption->setTextFormat(Qt::PlainText);caption->setToolTip(title);head->addWidget(caption,1);
+    auto amount=new QLabel(task);amount->setObjectName("backgroundTaskAmount");amount->setStyleSheet("font-weight:800;");amount->hide();head->addWidget(amount,0,Qt::AlignRight|Qt::AlignTop);
     auto progress=new QProgressBar(task);progress->setObjectName("backgroundTaskBar");progress->setRange(0,0);progress->setTextVisible(false);progress->setFixedHeight(8);layout->addWidget(progress);
     statusBar()->addPermanentWidget(task);task->show();
+    // Calls from the job's thread reach the bar through the event loop, and only when the shown tenth of a percent changes.
+    auto shown=std::make_shared<std::atomic<int>>(-1);
+    Report report=[task,progress,amount,shown](qint64 done,qint64 total){
+        if(total<=0)return;const int permille=int(std::clamp<qint64>(done*1000/total,0,1000));if(shown->exchange(permille)==permille)return;
+        QMetaObject::invokeMethod(task,[progress,amount,permille,done,total]{
+            // Downloaded: what follows (unpacking, checking) has no measure, so the bar goes back to moving.
+            if(permille>=1000){progress->setRange(0,0);amount->hide();return;}
+            progress->setRange(0,1000);progress->setValue(permille);amount->show();
+            const QLocale locale(Language::current);
+            amount->setText(QString::number(permille/10)+"%");amount->setToolTip(locale.formattedDataSize(done)+" / "+locale.formattedDataSize(total));
+        },Qt::QueuedConnection);};
     auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,task,watcher,done]{auto result=watcher->result();watcher->deleteLater();statusBar()->removeWidget(task);task->deleteLater();--m_jobs;lostSelection();if(result.contains("_error"))error(result["_error"].toString());else done(result);});
-    watcher->setFuture(QtConcurrent::run([job]{try{return job();}catch(...){return QJsonObject{{"_error",exception()}};}}));
+    watcher->setFuture(QtConcurrent::run([job,report]{try{return job(report);}catch(...){return QJsonObject{{"_error",exception()}};}}));
 }
 void MainWindow::createInstance(bool copy,int page){
     auto source=selected();if(copy&&source.dir.isEmpty())return;
@@ -1129,7 +1159,7 @@ void MainWindow::showCrash(const QString &dir){
     }
     lay.addStretch();
     auto bottom=new QHBoxLayout;lay.addLayout(bottom);
-    button(text("Ver registro completo","View full log","Ver registro completo"),bottom,[this,dir,&d]{showLog(dir,&d);},&d,false,"file-text");bottom->addStretch();
+    button(text("Ver registro completo","View full log","Ver registro completo"),bottom,[this,dir]{QString name=QFileInfo(dir).fileName();for(const auto &i:m_mc->instances())if(i.dir==dir)name=i.name;showLog(dir,name,[this,dir]{return m_mc->isRunning(dir);});},&d,false,"file-text");bottom->addStretch();
     button(text("Cerrar","Close","Fechar"),bottom,[&d]{d.reject();},&d);
     Ui::openWindow(d);
 }
@@ -1178,12 +1208,11 @@ void MainWindow::exportInstance(){
     auto safe=i.name;safe.replace(QRegularExpression("[^A-Za-z0-9 ._-]"),"_");auto file=QFileDialog::getSaveFileName(this,Language::key("Export instance"),QDir::homePath()+"/"+safe+".zip","ZIP (*.zip)");if(file.isEmpty())return;
     auto mc=m_mc;auto dir=i.dir;work(Language::key("Exporting instance…"),[mc,dir,file]{mc->exportInstance(dir,file);return QJsonObject{};},[this](QJsonObject){m_status->setText(Language::key("Instance exported. Import the ZIP in EBALIA to restore it."));});
 }
-void MainWindow::showLog(const QString &dir,QWidget *parent){
-    if(dir.isEmpty())return;QDialog log(parent);log.setObjectName("logWindow");log.setWindowTitle(text("Registro","Log","Registro"));Ui::fitToScreen(&log,{900,600});QVBoxLayout ll(&log);ll.setContentsMargins(16,16,16,16);QPlainTextEdit view;view.setReadOnly(true);view.setObjectName("logView");
-    QFont mono=QFontDatabase::systemFont(QFontDatabase::FixedFont);view.setFont(mono);
-    QFile f(dir+"/launcher.log");if(!f.exists())f.setFileName(dir+"/logs/latest.log");
-    if(f.open(QIODevice::ReadOnly)){f.seek(qMax<qint64>(0,f.size()-120000));view.setPlainText(QString::fromUtf8(f.readAll()));view.moveCursor(QTextCursor::End);}else view.setPlainText(text("Todavía no hay registro.","No log yet.","Ainda não há registro."));
-    ll.addWidget(&view);QDialogButtonBox close(QDialogButtonBox::Close);ll.addWidget(&close);connect(&close,&QDialogButtonBox::rejected,&log,&QDialog::reject);Ui::openWindow(log);
+void MainWindow::showLog(const QString &dir,const QString &title,std::function<bool()> running){
+    if(dir.isEmpty())return;
+    for(auto window:findChildren<QDialog*>("logWindow"))if(window->property("logFolder").toString()==dir){window->showNormal();window->raise();window->activateWindow();return;}
+    // Not a modal window: the launcher stays usable (to stop the game, for one) while the log runs beside it.
+    auto window=new LogWindow(dir,title,std::move(running),this);window->show();window->raise();window->activateWindow();
 }
 void MainWindow::play(){
     auto i=selected();if(i.dir.isEmpty()){createInstance();return;}if(m_installing.contains(i.dir))return;
@@ -1249,7 +1278,7 @@ void MainWindow::editInstance(){
     lay.addStretch();
     auto tools=new QHBoxLayout;tools->setSpacing(8);lay.addLayout(tools);
     button(text("Abrir carpeta","Open folder","Abrir pasta"),tools,[i]{QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir));},&d,false,"folder");
-    button(text("Registro","Log","Registro"),tools,[&,i]{showLog(i.dir,&d);},&d,false,"file-text");
+    button(text("Registro","Log","Registro"),tools,[this,i]{showLog(i.dir,i.name,[this,dir=i.dir]{return m_mc->isRunning(dir);});},&d,false,"file-text");
     button(text("Reparar instalación","Repair installation","Reparar instalação"),tools,[&,i]{d.reject();m_installing.insert(i.dir);m_mc->installInstance(i.dir);refreshInstances();},&d,false,"hammer");
     tools->addStretch();auto trash=button({},tools,[&]{d.reject();QTimer::singleShot(0,this,[this]{removeInstance();});},&d,false,"trash-2");trash->setProperty("danger",true);trash->setToolTip(text("Mover instancia a la papelera","Move instance to trash","Mover instância para a lixeira"));trash->setAccessibleName(trash->toolTip());
     QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);lay.addWidget(&buttons);buttons.button(QDialogButtonBox::Save)->setProperty("play",true);
@@ -1272,16 +1301,8 @@ void MainWindow::manageMods(){
                 if(off)image=image.convertToFormat(QImage::Format_Grayscale8);
                 for(int n=0;n<list.count();++n)if(list.item(n)->text()==file)list.item(n)->setIcon(QIcon(QPixmap::fromImage(image.scaled(64,64,Qt::KeepAspectRatio,image.width()<=32?Qt::FastTransformation:Qt::SmoothTransformation))));});
             watcher->setFuture(QtConcurrent::run([path=i.dir+"/mods/"+f,cache=m_mc->mcDir()+"/cache/mod-icons"]{
-                QImage image;image.loadFromData(ModCompat::iconData(path));if(!image.isNull())return image;
-                // No picture inside the jar: the project's icon on Modrinth, found by the file's SHA-1 (cached, also when there is none).
-                QFile jar(path);if(!jar.open(QIODevice::ReadOnly))return image;QCryptographicHash sha(QCryptographicHash::Sha1);sha.addData(&jar);const auto hash=QString::fromLatin1(sha.result().toHex());
-                const auto cached=cache+"/"+hash+".png";if(QFile::exists(cached)){image.load(cached);return image;}if(QFile::exists(cached+".none"))return image;
-                QDir().mkpath(cache);
-                try{const auto version=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"))).object();
-                    const auto project=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/project/"+version["project_id"].toString()))).object();
-                    const QUrl icon(project["icon_url"].toString());if(icon.scheme()=="https"&&image.loadFromData(ModRepository::fetch(icon))){image=image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation);image.save(cached,"PNG");return image;}
-                }catch(...){}
-                QFile none(cached+".none");none.open(QIODevice::WriteOnly);return image;}));
+                // The picture inside the jar, or else the project's icon on Modrinth.
+                QImage image;image.loadFromData(ModCompat::iconData(path));return image.isNull()?InstanceContent::modrinthIcon(path,cache):image;}));
         }};refresh();
     // Two rows, so the buttons still fit at the smallest window size: the selected mod, then the folder.
     auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);auto folderRow=new QHBoxLayout;folderRow->setSpacing(8);lay.addLayout(folderRow);
@@ -1321,7 +1342,6 @@ void MainWindow::manageContent(const QString &folder){
             auto item=new QListWidgetItem(Ui::icon(symbol,e.active||worlds?Ui::accent():dim),e.title+"\n"+detail(e),&list);item->setData(Qt::UserRole,e.file);item->setData(Qt::UserRole+1,e.active);
             if(e.active){auto font=item->font();font.setBold(true);item->setFont(font);}
             if(e.file==keep)list.setCurrentItem(item);
-            if(shaders)continue;
             if(const auto cached=known.value(e.file);!cached.file.isEmpty()&&cached.modified==e.modified){
                 auto shown=e;shown.description=cached.description;if(!cached.icon.isNull())item->setIcon(icon(cached.icon));item->setText(e.title+"\n"+detail(shown));continue;}
             // The pack's own picture and description, or the world's icon, read in the background.
@@ -1330,7 +1350,7 @@ void MainWindow::manageContent(const QString &folder){
                 for(int n=0;n<list.count();++n)if(auto item=list.item(n);item->data(Qt::UserRole).toString()==e.file){
                     auto shown=e;shown.active=item->data(Qt::UserRole+1).toBool(); // turned on or off since it was read
                     if(!e.icon.isNull())item->setIcon(icon(e.icon));item->setText(e.title+"\n"+detail(shown));}});
-            watcher->setFuture(QtConcurrent::run([dir=i.dir,folder,e]{return InstanceContent::describe(dir,folder,e);}));
+            watcher->setFuture(QtConcurrent::run([dir=i.dir,folder,e,cache=m_mc->mcDir()+"/cache/mod-icons"]{return InstanceContent::describe(dir,folder,e,cache);}));
         }
         if(!list.currentItem())list.setCurrentRow(0);};
     auto current=[&]{auto item=list.currentItem();return item?item->data(Qt::UserRole).toString():QString();};
@@ -1349,8 +1369,8 @@ void MainWindow::manageContent(const QString &folder){
         toggle->setObjectName("toggleContent");
         const QString turnOff=packs?text("Desactivar","Turn off","Desativar"):text("Apagar shaders","Turn shaders off","Desligar shaders"),turnOn=packs?text("Activar","Turn on","Ativar"):text("Usar este shader","Use this shader","Usar este shader");
         // As wide as its longer label, so the row does not move when the label changes.
-        {int widest=0;for(const auto &label:{turnOff,turnOn}){toggle->setText(label);widest=std::max(widest,toggle->sizeHint().width());}toggle->setMinimumWidth(widest);}
-        auto relabel=[&,toggle,turnOff,turnOn]{const bool on=list.currentItem()&&list.currentItem()->data(Qt::UserRole+1).toBool();toggle->setEnabled(!current().isEmpty());toggle->setText(on?turnOff:turnOn);};
+        {int widest=0;for(const auto &label:{turnOff,turnOn}){toggle->setText(" "+label);widest=std::max(widest,toggle->sizeHint().width());}toggle->setMinimumWidth(widest);}
+        auto relabel=[&,toggle,turnOff,turnOn]{const bool on=list.currentItem()&&list.currentItem()->data(Qt::UserRole+1).toBool();toggle->setEnabled(!current().isEmpty());toggle->setText(" "+(on?turnOff:turnOn));};
         connect(&list,&QListWidget::currentItemChanged,&d,relabel);relabel();
         connect(&list,&QListWidget::itemDoubleClicked,&d,[toggle](QListWidgetItem *item){if(item->data(Qt::UserRole).isValid())toggle->click();});
     }else{
@@ -1505,12 +1525,13 @@ void MainWindow::account(bool microsoft){
     connect(&auth,&MsAuth::statusUpdate,&d,[status](const QString &s){status->setText(Language::message(s));});
     connect(&auth,&MsAuth::profilePicture,&d,[this](const QString &uuid,const QImage &picture){m_accounts->setPicture(uuid,picture);});connect(&auth,&MsAuth::loginFailed,&d,[this,&d](const QString &e){d.reject();error(e);});connect(&auth,&MsAuth::loginDone,&d,[this,&d](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});d.accept();});QTimer::singleShot(0,&auth,&MsAuth::startLogin);Ui::openWindow(d);auth.cancel();
 }
-void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth){
+void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth,bool urgent){
     const auto key=url+"@"+QString::number(maxWidth);
     if(!url.startsWith("https://"))return;if(auto it=m_imageCache.constFind(key);it!=m_imageCache.cend()){done(*it);return;}
     if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;
     if(!m_images){m_images=new QNetworkAccessManager(this);m_images->setTransferTimeout(20000);auto cache=new QNetworkDiskCache(m_images);cache->setCacheDirectory(m_root+"/cache/images");cache->setMaximumCacheSize(80*1024*1024);m_images->setCache(cache);}
     QNetworkRequest request{QUrl(url)};request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/4.0");request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::NoLessSafeRedirectPolicy);request.setAttribute(QNetworkRequest::CacheLoadControlAttribute,QNetworkRequest::PreferCache);
+    if(urgent)request.setPriority(QNetworkRequest::HighPriority);
     auto reply=m_images->get(request);
     connect(reply,&QNetworkReply::finished,this,[this,reply,key,done,maxWidth]{reply->deleteLater();QPixmap pixmap;if(reply->error()==QNetworkReply::NoError)pixmap.loadFromData(reply->readAll());if(pixmap.isNull())return;if(pixmap.width()>maxWidth)pixmap=pixmap.scaledToWidth(maxWidth,Qt::SmoothTransformation);m_imageCache.insert(key,pixmap);done(pixmap);});
 }
@@ -1564,15 +1585,15 @@ void MainWindow::lostAction(bool launch){
         if(windows&&LostInstaller::wine().isEmpty()){error(Language::key("This Windows package requires Wine. Install Wine or run it on Windows."));return;}
 #endif
         auto root=m_root;const auto libraries=m_mc->mcDir()+"/libraries";const auto player=m_accounts->active().name;
-        work(Language::key("Preparing Java 8 for this version…"),[root,windows,native,v,dest,libraries]{
-                QJsonObject r;try{r["java"]=LostInstaller::java(root,windows);}catch(const std::exception &e){r["warning"]=QString::fromUtf8(e.what());}
+        measuredWork(Language::key("Preparing Java 8 for this version…"),[root,windows,native,v,dest,libraries](const Report &report){
+                QJsonObject r;try{r["java"]=LostInstaller::java(root,windows,[report](int done,int total){report(done,total);});}catch(const std::exception &e){r["warning"]=QString::fromUtf8(e.what());}
                 if(native)LostNative::prepare(v.native,dest,libraries); // errors reach the user through work()
                 return r;},
             [this,v,dest,player,libraries](QJsonObject r){if(r.contains("warning"))m_status->setText(Language::message(r["warning"].toString()));m_java->launch(v,dest,r["java"].toString(),player,libraries);});
         return;
     }
-    work(text("Descargando y preparando la versión perdida…","Downloading and preparing the lost version…","Baixando e preparando a versão perdida…"),[v,dest]{
-        LostInstaller::install(v,dest);return QJsonObject{};
+    measuredWork(text("Descargando y preparando la versión perdida…","Downloading and preparing the lost version…","Baixando e preparando a versão perdida…"),[v,dest](const Report &report){
+        LostInstaller::install(v,dest,report);return QJsonObject{};
     },[this](QJsonObject){refreshLost();m_status->setText(text("Versión perdida instalada","Lost version installed","Versão perdida instalada"));});
 }
 bool MainWindow::canUpdate() const {

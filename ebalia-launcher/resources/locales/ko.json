@@ -995,7 +995,6 @@
   "Bedrock is starting… If Minecraft Linux asks you to approve your Google credentials, accept in its window.": "Bedrock 실행 중… Minecraft Linux가 Google 자격 증명 승인을 요청하면 그 창에서 승인하세요.",
   "Close Minecraft Linux first.": "먼저 Minecraft Linux를 닫으세요.",
   "Close Minecraft Linux before playing from EBALIA.": "EBALIA에서 플레이하기 전에 Minecraft Linux를 닫으세요.",
-  "DOWNLOAD": "다운로드",
   "Install (%1)": "설치 (%1)",
   "This instance has no mod loader. Choose one with Fabric, Quilt, Forge or NeoForge, or look for resource packs.": "이 인스턴스에는 모드 로더가 없습니다. Fabric, Quilt, Forge, NeoForge 인스턴스를 선택하거나 리소스 팩을 찾아보세요.",
   "%1 projects": "프로젝트 %1개",
@@ -1045,5 +1044,9 @@
   "Could not delete the skin.": "스킨을 삭제할 수 없습니다.",
   "Guide": "가이드",
   "Mute Silence": "Silence 음소거",
-  "Turn Silence's sounds on": "Silence 효과음 켜기"
+  "Turn Silence's sounds on": "Silence 효과음 켜기",
+  "Copy": "복사",
+  "Live": "실시간",
+  "Filter lines…": "줄 필터…",
+  "The game is not running": "게임이 실행 중이 아닙니다"
 }

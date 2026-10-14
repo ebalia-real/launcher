@@ -9,7 +9,11 @@ struct Entry {QString file,title,description;QImage icon;qint64 size=0;QDateTime
 // The entries of "resourcepacks", "shaderpacks" or "saves", by name. Cheap: no archive is opened.
 QList<Entry> list(const QString &instance,const QString &folder);
 // Fills in what needs reading the pack or world: the description in pack.mcmeta and the picture (pack.png, icon.png).
-Entry describe(const QString &instance,const QString &folder,Entry entry);
+// With an icon cache folder, a pack without a picture (shader packs never have one) gets its Modrinth project's icon.
+Entry describe(const QString &instance,const QString &folder,Entry entry,const QString &iconCache={});
+// The icon of the Modrinth project a file (mod, pack) belongs to, found by its SHA-1 and kept in cache; null when it is
+// not on Modrinth or has no icon. Network: call off the UI thread.
+QImage modrinthIcon(const QString &file,const QString &cache);
 // Turns a resource pack on or off in options.txt, as the game's pack screen does; the newest one goes on top.
 void setResourcePack(const QString &instance,const QString &file,bool on);
 // The shader pack Iris or Oculus loads, or empty when shaders are off.

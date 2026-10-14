@@ -18,6 +18,7 @@ class AccountManager;
 class JavaRunner;
 class QCloseEvent;
 class QPushButton;
+class QToolButton;
 class QHBoxLayout;
 class QVBoxLayout;
 class QNetworkAccessManager;
@@ -67,7 +68,8 @@ private:
     void refreshLost();
     void refreshNews(bool network=true);
     // Downloads a picture once (disk and memory cache) and makes it at most maxWidth pixels wide.
-    void loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth=640);
+    // urgent: ahead of the other pictures waiting to download (the one the person is looking at).
+    void loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth=640,bool urgent=false);
     void accountMenu();
     void instancePickerMenu();
     void selection();
@@ -85,7 +87,8 @@ private:
     void changeGroup();
     void copyInstance();
     void exportInstance();
-    void showLog(const QString &dir,QWidget *parent);
+    // The game's log in its own window, live while the game runs; one window per game.
+    void showLog(const QString &dir,const QString &title,std::function<bool()> running);
     void play();
     void launchInstance(const McInstance &instance);
     void editInstance();
@@ -110,6 +113,10 @@ private:
     void lostSelection();
     static QString lostCategory(const QString &category);
     void work(const QString &label,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done);
+    // The same, for a job that knows how far it got (a download): report(done,total), from the job's thread, fills the
+    // bar and shows the percentage and the size.
+    using Report=std::function<void(qint64 done,qint64 total)>;
+    void measuredWork(const QString &label,std::function<QJsonObject(const Report &report)> job,std::function<void(QJsonObject)> done);
     void error(const QString &message);
     QString m_root;
     PatreonAuth *m_patreon;
@@ -132,7 +139,7 @@ private:
     QComboBox *m_target=nullptr,*m_modProvider=nullptr,*m_modKind=nullptr;
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
-    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;
+    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;QToolButton *m_lostLog=nullptr;
     QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;QWidget *m_lostImage=nullptr;
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;

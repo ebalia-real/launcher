@@ -26,6 +26,7 @@
 #include "SkinManager.hpp"
 #include "TitleBar.hpp"
 #include "InstanceContent.hpp"
+#include "LogWindow.hpp"
 #include <QTcpSocket>
 #include <QUrlQuery>
 class UiTests:public QObject {
@@ -98,7 +99,10 @@ private slots:
          auto launch=page.findChild<QPushButton*>("bedrockPlay");QVERIFY(launch);
          QTRY_VERIFY(!page.findChild<QLabel*>("bedrockProviderStatus")->text().contains("…"));
          QVERIFY(!launch->isEnabled());QVERIFY(page.findChild<QPushButton*>("bedrockManager")->isHidden());
-         if(!QStandardPaths::findExecutable("flatpak").isEmpty()||QSysInfo::productType()=="macos")QVERIFY(page.findChild<QPushButton*>("bedrockInstall")->isVisible());}
+         if(!QStandardPaths::findExecutable("flatpak").isEmpty()||QSysInfo::productType()=="macos")QVERIFY(page.findChild<QPushButton*>("bedrockInstall")->isVisible());
+         // Opening the page again does not look again; "Check again" does.
+         auto status=page.findChild<QLabel*>("bedrockProviderStatus");const auto found=status->text();page.hide();page.show();QCOMPARE(status->text(),found);
+         page.findChild<QPushButton*>("bedrockDetect")->click();QVERIFY(status->text().contains("…"));QTRY_VERIFY(!status->text().contains("…"));}
         // Installed with two downloaded versions: both listed, Play enabled, no Install.
         qputenv("EBALIA_BEDROCK_RUNTIME","--user");
         for(const auto version:{"1.21.100.1","1.26.51.1"}){QVERIFY(QDir().mkpath(game.path()+"/versions/"+version+"/lib/x86_64"));QFile lib(game.path()+"/versions/"+version+"/lib/x86_64/libminecraftpe.so");QVERIFY(lib.open(QIODevice::WriteOnly));}
@@ -535,6 +539,9 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(!window.findChild<QWidget*>("backgroundTaskProgress"),180000);
             qInfo()<<folder<<QDir(dir+"/"+folder).entryList(QDir::Files)<<window.findChild<QLabel*>("statusText")->text();
             QVERIFY(!QDir(dir+"/"+folder).entryList(QDir::Files).isEmpty());
+            // A shader pack has no picture of its own: its window shows the Modrinth project's icon.
+            if(folder=="shaderpacks"){const auto file=dir+"/shaderpacks/"+QDir(dir+"/shaderpacks").entryList({"*.zip"},QDir::Files).value(0);
+                QVERIFY(!InstanceContent::modrinthIcon(file,data.path()+"/icons").isNull());QVERIFY(!InstanceContent::modrinthIcon(file,data.path()+"/icons").isNull());} // the second from cache
         }
         if(!ModRepository::curseForgeKey().isEmpty()){
             provider->setCurrentIndex(provider->findData("curseforge"));kind->setCurrentIndex(kind->findData("resourcepack"));emit kind->activated(kind->currentIndex());
@@ -601,6 +608,31 @@ private slots:
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(!window.isMaximized());
         window.findChild<QToolButton*>("titleMaximize")->click();QTRY_VERIFY(window.isMaximized());
     }
+    void liveLog(){
+        QTemporaryDir dir;auto write=[&](const QByteArray &bytes,bool fresh){QFile f(dir.path()+"/launcher.log");if(f.open(fresh?QIODevice::WriteOnly:QIODevice::Append))f.write(bytes);};
+        write("[12:00:00] [main/INFO]: Loading Minecraft\n",true);
+        bool running=true;LogWindow log(dir.path(),"Test",[&]{return running;},nullptr);log.show();
+        auto view=log.findChild<QPlainTextEdit*>("logView");auto state=log.findChild<QLabel*>("logState");QVERIFY(view&&state);
+        QVERIFY(view->toPlainText().contains("Loading Minecraft"));QVERIFY(state->text().contains(Language::key("Live")));
+        // Lines appear while the game writes them; a line still being written waits for its end.
+        write("[12:00:01] [Render thread/ERROR]: Missing texture\n[12:00:02] [main/WARN]: Slow",false);
+        QTRY_VERIFY(view->toPlainText().contains("Missing texture"));QVERIFY(!view->toPlainText().contains("Slow"));
+        write(" chunk\n",false);QTRY_VERIFY(view->toPlainText().contains("Slow chunk"));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())log.grab().save(out+"/live-log.png");
+        auto filter=log.findChild<QLineEdit*>("logFilter");filter->setText("error");QCOMPARE(view->toPlainText(),QString("[12:00:01] [Render thread/ERROR]: Missing texture"));filter->clear();
+        // A new game writes the file from the beginning again; then the game closes.
+        write("[13:00:00] [main/INFO]: Second run\n",true);running=false;
+        QTRY_VERIFY(view->toPlainText().startsWith("[13:00:00]"));QVERIFY(!view->toPlainText().contains("Loading Minecraft"));QTRY_VERIFY(!state->text().contains(Language::key("Live")));
+    }
+    void comboPopupUnderTheBox(){
+        // The list opens under the box with one border, not over the box with empty strips above and below it.
+        qApp->setStyleSheet(Ui::styleSheet());QWidget host;auto box=new QComboBox(&host);box->addItems({"Mods","Resource packs","Shader packs"});box->setCurrentIndex(1);box->setGeometry(20,20,240,40);
+        host.resize(300,300);host.show();QVERIFY(QTest::qWaitForWindowExposed(&host));
+        box->showPopup();auto popup=box->view()->window();QTRY_VERIFY(popup->isVisible());
+        QVERIFY(popup->mapToGlobal(QPoint(0,0)).y()>=box->mapToGlobal(QPoint(0,box->height())).y()-2);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())popup->grab().save(out+"/combo-popup.png");
+        box->hidePopup();
+    }
     void deleteSkin(){
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
         QImage image(64,64,QImage::Format_ARGB32);image.fill(QColor(30,140,200));const auto png=data.path()+"/blue.png";QVERIFY(image.save(png));
@@ -652,6 +684,10 @@ private slots:
     void responsiveHomeAndArchive(){
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
         MainWindow window;window.show();auto pages=window.findChild<QStackedWidget*>();QVERIFY(pages);
+        // The first lost version counts as installed, so its Uninstall and Log buttons are in the row too.
+        {auto lost=window.findChild<QListWidget*>("lostList");QVERIFY(lost&&lost->count()>1);const auto id=lost->item(0)->data(Qt::UserRole).toString();
+         QDir().mkpath(data.path()+"/versions/"+id);QFile mark(data.path()+"/versions/"+id+"/.installed.json");QVERIFY(mark.open(QIODevice::WriteOnly));mark.write("{}");mark.close();
+         lost->setCurrentRow(1);lost->setCurrentRow(0);}
         for(const QSize size:{QSize(640,480),QSize(800,600),QSize(1280,800),QSize(1920,1080)}){
             window.resize(size);window.showPage(MainWindow::Home);QTest::qWait(80);QCOMPARE(window.size(),size);
             auto home=qobject_cast<QScrollArea*>(pages->currentWidget());QVERIFY(home);QCOMPARE(home->horizontalScrollBar()->maximum(),0);
@@ -663,6 +699,9 @@ private slots:
             QRect installRect(install->mapTo(detail,QPoint()),install->size()),launchRect(launch->mapTo(detail,QPoint()),launch->size());
             QVERIFY(detail->rect().contains(installRect));QVERIFY(detail->rect().contains(launchRect));QVERIFY(!installRect.intersects(launchRect));
             QVERIFY(installRect.left()-launchRect.right()>=10);
+            auto uninstall=window.findChild<QPushButton*>("lostUninstall");QVERIFY(uninstall->isVisible());QVERIFY(window.findChild<QToolButton*>("lostLog")->isVisible());
+            QVERIFY(detail->rect().contains(QRect(uninstall->mapTo(detail,QPoint()),uninstall->size())));
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()&&size==QSize(1280,800))window.grab().save(out+"/lost-installed.png");
             for(int page=0;page<=MainWindow::Settings;++page){
                 window.showPage(page);QTest::qWait(30);auto area=qobject_cast<QScrollArea*>(pages->currentWidget());
                 QVERIFY2(area->horizontalScrollBar()->maximum()==0,qPrintable(QString("Page %1 overflows at %2 px").arg(page).arg(size.width())));

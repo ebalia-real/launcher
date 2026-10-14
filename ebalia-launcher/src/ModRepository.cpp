@@ -121,15 +121,19 @@ QJsonObject ModRepository::details(const QString &projectId) {
     if (projectId.startsWith("cf-")) {
         const auto id = projectId.mid(3);
         const auto mod = curse("mods/" + id, {}).object()["data"].toObject();
-        QJsonArray gallery; for (const auto &shot : mod["screenshots"].toArray()) gallery.append(shot.toObject()["url"]);
-        return {{"body", ModPage::html(curse("mods/" + id + "/description", {}).object()["data"].toString(), false)}, {"format", "html"}, {"gallery", gallery},
+        // Small pictures for the strip, the originals for the viewer and the cover.
+        QJsonArray gallery, full;
+        for (const auto &v : mod["screenshots"].toArray()) {const auto shot = v.toObject(); const auto thumb = shot["thumbnailUrl"].toString(); gallery.append(thumb.startsWith("https://") ? thumb : shot["url"].toString()); full.append(shot["url"]);}
+        return {{"body", ModPage::html(curse("mods/" + id + "/description", {}).object()["data"].toString(), false)}, {"format", "html"}, {"gallery", gallery}, {"galleryFull", full},
                 {"downloads", mod["downloadCount"]}, {"url", mod["links"].toObject()["websiteUrl"]}};
     }
     if (!QRegularExpression("^[A-Za-z0-9_-]+$").match(projectId).hasMatch()) fail("Invalid project.");
     const auto project = api("project/" + projectId).object();
-    QJsonArray gallery; for (const auto &g : project["gallery"].toArray()) gallery.append(g.toObject()["url"]);
+    // Modrinth's "url" is a 350 pixel wide preview; "raw_url" is the picture as uploaded.
+    QJsonArray gallery, full;
+    for (const auto &v : project["gallery"].toArray()) {const auto g = v.toObject(); gallery.append(g["url"]); const auto raw = g["raw_url"].toString(); full.append(raw.startsWith("https://") ? raw : g["url"].toString());}
     const auto type = project["project_type"].toString("mod");
-    return {{"body", ModPage::html(project["body"].toString(), true)}, {"format", "html"}, {"gallery", gallery}, {"downloads", project["downloads"]},
+    return {{"body", ModPage::html(project["body"].toString(), true)}, {"format", "html"}, {"gallery", gallery}, {"galleryFull", full}, {"downloads", project["downloads"]},
             {"url", "https://modrinth.com/" + (QStringList{"mod", "resourcepack", "shader", "modpack", "datapack"}.contains(type) ? type : QString("mod")) + "/" + project["slug"].toString()}};
 }
 QJsonObject ModRepository::installPack(const QString &instance, const QString &projectId, const QString &game, const QString &kind) {

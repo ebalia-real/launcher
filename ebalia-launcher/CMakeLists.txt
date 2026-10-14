@@ -48,7 +48,7 @@ if(NOT EBALIA_MS_CLIENT_ID STREQUAL "" AND NOT EBALIA_MS_CLIENT_ID MATCHES "^[A-
   message(FATAL_ERROR "Invalid Microsoft application ID")
 endif()
 configure_file(src/MicrosoftConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/MicrosoftConfig.hpp" @ONLY)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/LogWindow.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
   include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
@@ -88,7 +88,7 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/GuidedTour.cpp src/TourMascot.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SkinViewer.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/TitleBar.cpp src/LogWindow.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
       include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   set_target_properties(ebalia-ui-tests PROPERTIES WIN32_EXECUTABLE FALSE)
