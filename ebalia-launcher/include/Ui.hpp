@@ -10,6 +10,7 @@ class QWidget;
 // Shared look of the launcher: Lucide icons (resources/icons/ui, ISC license), the dark theme and window helpers.
 #include <QColor>
 #include <QList>
+class QThreadPool;
 namespace Ui {
 // A row that becomes a column before its controls need to squeeze together.
 class ResponsiveRow:public QWidget {
@@ -44,6 +45,9 @@ QPixmap art(const QString &resource,QSize size,int radius=0);
 // only while the receiver is alive; identical requests share one job and a memory cache.
 void loadArt(const QString &resource,QSize bounds,QObject *receiver,std::function<void(const QPixmap &)> ready);
 QPixmap cachedArt(const QString &resource,QSize bounds);
+// A few threads for work nobody waits on (icons, pack descriptions, lookups on Modrinth, skin heads): it can be slow
+// or wait on the network without delaying anything the person asked for, which runs on Qt's own pool.
+QThreadPool *backgroundPool();
 // Any picture cropped to fill size (centered horizontally, top kept), with rounded corners when radius > 0.
 QPixmap cover(const QPixmap &source,QSize size,int radius=0);
 // Round avatar with the player's initial; an empty name gives the generic user icon.

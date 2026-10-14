@@ -1,5 +1,6 @@
 #include <QtTest>
 #include <QtWidgets>
+#include <QtConcurrent>
 #include "MainWindow.hpp"
 #include "VersionManager.hpp"
 #include "Language.hpp"
@@ -27,6 +28,7 @@
 #include "TitleBar.hpp"
 #include "InstanceContent.hpp"
 #include "LogWindow.hpp"
+#include "Archive.hpp"
 #include <QTcpSocket>
 #include <QUrlQuery>
 class UiTests:public QObject {
@@ -61,6 +63,8 @@ private slots:
         QVERIFY(callback(query.queryItemValue("state")).startsWith("HTTP/1.1 200"));QCOMPARE(failed.count(),1);QCOMPARE(done.count(),0);
         auth.cancel();
     }
+    // Like closing the launcher: what is still downloading stops, so the tests end with their last result.
+    void cleanupTestCase(){ModRepository::cancelAll();QThreadPool::globalInstance()->waitForDone(5000);}
     void initTestCase(){QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
 
     void bedrockVersionsAndProfile() {
@@ -610,6 +614,66 @@ private slots:
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(window.isMaximized());
         QTest::mouseDClick(bar,Qt::LeftButton,{},QPoint(300,15));QTRY_VERIFY(!window.isMaximized());
         window.findChild<QToolButton*>("titleMaximize")->click();QTRY_VERIFY(window.isMaximized());
+    }
+    void profileLag(){
+        // How long the window freezes for common actions on a full instance: real mod jars (EBALIA_PROFILE_MODS), resource
+        // packs, large shader packs, worlds and screenshots. Opt-in: EBALIA_PROFILE=1.
+        if(!qEnvironmentVariableIsSet("EBALIA_PROFILE"))QSKIP("Opt-in profiling (EBALIA_PROFILE=1)");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        QString dir;{McInstanceManager setup(data.path());dir=setup.createInstance("Heavy","1.20.1","forge");}
+        const auto source=qEnvironmentVariable("EBALIA_PROFILE_MODS");int mods=0;
+        for(int round=0;round<4&&mods<40;++round)for(const auto &jar:QDir(source).entryList({"*.jar"},QDir::Files))if(mods<40&&QFile::copy(source+"/"+jar,dir+"/mods/"+QString::number(round)+"-"+jar))++mods;
+        QTemporaryDir stage;
+        for(int n=0;n<10;++n){QDir().mkpath(stage.path()+"/p"+QString::number(n));QFile meta(stage.path()+"/p"+QString::number(n)+"/pack.mcmeta");meta.open(QIODevice::WriteOnly);meta.write(R"({"pack":{"pack_format":15,"description":"Pack"}})");meta.close();
+            QImage icon(128,128,QImage::Format_ARGB32);icon.fill(QColor(20*n,90,160));icon.save(stage.path()+"/p"+QString::number(n)+"/pack.png");QDir().mkpath(dir+"/resourcepacks");Archive::compress(stage.path()+"/p"+QString::number(n),dir+"/resourcepacks/Pack"+QString::number(n)+".zip");}
+        QDir().mkpath(dir+"/shaderpacks");for(int n=0;n<3;++n){QFile zip(dir+"/shaderpacks/Shader"+QString::number(n)+".zip");zip.open(QIODevice::WriteOnly);QByteArray chunk(1<<20,char(n));for(int m=0;m<25;++m)zip.write(chunk);}
+        for(int n=0;n<3;++n){QDir().mkpath(dir+"/saves/World"+QString::number(n));QFile level(dir+"/saves/World"+QString::number(n)+"/level.dat");level.open(QIODevice::WriteOnly);level.write("x");QImage(64,64,QImage::Format_ARGB32).save(dir+"/saves/World"+QString::number(n)+"/icon.png");}
+        QDir().mkpath(dir+"/screenshots");for(int n=0;n<20;++n){QImage shot(1920,1080,QImage::Format_RGB32);shot.fill(QColor(10*n,120,200));shot.save(dir+"/screenshots/2026-10-1"+QString::number(n%10)+"_"+QString::number(n)+".png");}
+        qInfo()<<"instance:"<<mods<<"mods";qunsetenv("EBALIA_NO_NETWORK");auto offline=qScopeGuard([]{qputenv("EBALIA_NO_NETWORK","1");});
+        // How long a task the person starts waits behind background work (icons, lookups) before it runs.
+        auto queueWait=[]{QElapsedTimer t;t.start();auto f=QtConcurrent::run([t]{return t.elapsed();});while(!f.isFinished())QCoreApplication::processEvents(QEventLoop::AllEvents,5);return f.result();};
+        // A timer that should fire every 5 ms: the longest gap is the longest freeze.
+        QElapsedTimer clock;clock.start();qint64 last=0,worst=0;QTimer beat;beat.setInterval(5);QObject::connect(&beat,&QTimer::timeout,[&]{const auto now=clock.elapsed();worst=std::max(worst,now-last);last=now;});beat.start();
+        auto measure=[&](const char *name,std::function<void()> action,int settle){QTest::qWait(50);worst=0;last=clock.elapsed();QElapsedTimer t;t.start();action();const auto call=t.elapsed();QTest::qWait(settle);
+            qInfo().noquote()<<QString("%1: call %2 ms, worst freeze %3 ms").arg(name,-28).arg(call,5).arg(worst,5);}; // the beat cannot fire while the window is held, so the gap includes any freeze
+        std::unique_ptr<MainWindow> window;
+        measure("start (window)",[&]{window=std::make_unique<MainWindow>();window->resize(1920,1080);window->show();},1500);
+        measure("full repaint",[&]{window->repaint();},100);
+        InstanceGrid *grid=nullptr;InstanceDetail *detail=nullptr;
+        for(auto w:window->findChildren<QWidget*>()){if(auto g=dynamic_cast<InstanceGrid*>(w))grid=g;if(auto d=dynamic_cast<InstanceDetail*>(w))detail=d;}QVERIFY(grid&&detail);
+        measure("open Instances page",[&]{window->showPage(MainWindow::Instances);},300);
+        measure("open instance page",[&]{grid->open(dir);},800);
+        measure("back to all instances",[&]{detail->back();},300);
+        measure("open instance page again",[&]{grid->open(dir);},800);
+        // Inside a window: the action runs once the window is open; the window closes after it settles.
+        auto inWindow=[&](const char *name,std::function<void()> open,std::function<void(QDialog*)> inside){
+            auto poll=std::make_shared<std::function<void()>>();
+            *poll=[&,name,inside,poll]{
+                QDialog *d=nullptr;for(auto w:QApplication::topLevelWidgets())if((w->objectName()=="modsWindow"||w->objectName()=="contentWindow")&&w->isVisible())d=qobject_cast<QDialog*>(w);
+                if(!d){QTimer::singleShot(5,window.get(),[poll]{(*poll)();});return;}
+                QTimer::singleShot(400,d,[&,name,inside,d,poll]{measure(name,[&]{inside(d);},600);d->reject();*poll=nullptr;});};
+            QTimer::singleShot(0,window.get(),[poll]{(*poll)();});
+            QElapsedTimer opened;opened.start();bool seen=false;
+            QTimer::singleShot(0,window.get(),[&]{std::function<void()> wait;auto check=std::make_shared<std::function<void()>>();*check=[&,check]{for(auto w:QApplication::topLevelWidgets())if((w->objectName()=="modsWindow"||w->objectName()=="contentWindow")&&w->isVisible()){
+                if(!seen){seen=true;qInfo().noquote()<<QString("%1: open to visible %2 ms, a new task waits %3 ms, pool busy %4/%5").arg(name,-28).arg(opened.elapsed()).arg(queueWait()).arg(QThreadPool::globalInstance()->activeThreadCount()).arg(QThreadPool::globalInstance()->maxThreadCount());}*check=nullptr;return;}
+                QTimer::singleShot(1,window.get(),[check]{if(*check)(*check)();});};(*check)();});
+            open();};
+        auto buttonNamed=[](QDialog *d,const QString &text){for(auto b:d->findChildren<QPushButton*>())if(b->text().trimmed()==text)return b;return (QPushButton*)nullptr;};
+        inWindow("mods window: remove a mod",[&]{window->openMods(dir);},[&](QDialog *d){auto list=d->findChild<QListWidget*>("modList");list->setCurrentRow(0);buttonNamed(d,Language::text("Quitar mod","Remove mod","Remover mod"))->click();});
+        inWindow("mods window: turn one off",[&]{window->openMods(dir);},[&](QDialog *d){auto list=d->findChild<QListWidget*>("modList");list->setCurrentRow(1);buttonNamed(d,Language::text("Activar / desactivar","Enable / disable","Ativar / desativar"))->click();});
+        for(const auto folder:{"resourcepacks","shaderpacks","saves"})
+            inWindow((QString(folder)+" window: toggle").toUtf8().constData(),[&,folder]{window->openContent(dir,folder);},[&](QDialog *d){auto list=d->findChild<QListWidget*>("contentList");list->setCurrentRow(0);if(auto t=d->findChild<QPushButton*>("toggleContent"))t->click();});
+        measure("Skins page",[&]{window->showPage(MainWindow::Skins);},500);
+        measure("Guide page",[&]{window->showPage(MainWindow::Guide);},300);
+        measure("Settings page",[&]{window->showPage(MainWindow::Settings);},300);
+        measure("Lost versions page",[&]{window->showPage(MainWindow::Lost);},300);
+        measure("Home page",[&]{window->showPage(MainWindow::Home);},300);
+        // Discover: the list, going down it (each mod's page, pictures and originals), the picture viewer.
+        auto results=window->findChild<QListWidget*>("modResults");
+        measure("Discover page (search)",[&]{window->showPage(MainWindow::Explore);},100);QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,30000);
+        measure("going down 10 mods",[&]{for(int n=0;n<10&&n<results->count();++n){results->setCurrentRow(n);QTest::qWait(250);}},2500);
+        measure("staying on a mod (originals)",[&]{results->setCurrentRow(0);},3000);
+        qInfo()<<"a new task waits"<<queueWait()<<"ms at the end";
     }
     void discoverMarksInstalled(){
         // A project the instance has says so in the list, and Install neither counts nor installs it again.

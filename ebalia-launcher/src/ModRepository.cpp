@@ -23,6 +23,7 @@
 #include <QRegularExpression>
 #include <stdexcept>
 #include <algorithm>
+#include <atomic>
 
 namespace {
 [[noreturn]] void fail(const QString &s) { throw std::runtime_error(s.toUtf8().constData()); }
@@ -53,8 +54,11 @@ QJsonObject ModRepository::read(const QString &path) {
     return doc.object();
 }
 void ModRepository::write(const QString &path, const QJsonObject &o) { bytes(path, QJsonDocument(o).toJson()); }
-QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers) {
+namespace { std::atomic<bool> cancelled{false}; }
+void ModRepository::cancelAll() { cancelled = true; }
+QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers, int attempts, int timeout) {
     if (url.scheme() != "https") fail("La descarga requiere HTTPS: " + url.host());
+    if (cancelled) fail("Cancelled: " + url.host());
     // Offline mode (tests, EBALIA_NO_NETWORK): fail at once instead of waiting on timeouts.
     if (qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")) fail("Sin conexión: " + url.host());
     // One manager per thread keeps connections open between requests (keep-alive and HTTP/2), as Prism Launcher does:
@@ -66,21 +70,24 @@ QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArra
     // Mojang occasionally closes the metadata connection while the launcher is
     // starting. Retry transient transport failures before falling back to the
     // cached manifest, instead of surfacing "Operation canceled" immediately.
-    for (int attempt = 0; attempt < 3; ++attempt) {
+    for (int attempt = 0; attempt < attempts; ++attempt) {
         QNetworkRequest req(url);
         req.setHeader(QNetworkRequest::UserAgentHeader, "EBALIA-Launcher/1.1");
         for(auto it=headers.begin();it!=headers.end();++it)req.setRawHeader(it.key(),it.value());
-        req.setTransferTimeout(60000);
+        req.setTransferTimeout(std::min(60000, timeout));
         req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, headers.isEmpty()?QNetworkRequest::NoLessSafeRedirectPolicy:QNetworkRequest::ManualRedirectPolicy);
         auto *reply = nam.get(req);
         QEventLoop loop; QTimer timer; timer.setSingleShot(true);
         QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
         QObject::connect(&timer, &QTimer::timeout, reply, &QNetworkReply::abort);
-        timer.start(70000); loop.exec();
+        // Checked a few times a second on this thread: closing the launcher stops the wait at once.
+        QTimer watch; watch.setInterval(200); QObject::connect(&watch, &QTimer::timeout, reply, [reply]{ if (cancelled) reply->abort(); }); watch.start();
+        timer.start(timeout); loop.exec();
         if (reply->error() == QNetworkReply::NoError) { auto data = reply->readAll(); delete reply; return data; }
         lastError = reply->errorString();
         delete reply;
-        if (attempt < 2) QThread::msleep(400 * (attempt + 1));
+        if (cancelled) break;
+        if (attempt + 1 < attempts) QThread::msleep(400 * (attempt + 1));
     }
     fail(QString("Error de red (%1): %2").arg(url.host(), lastError));
 }

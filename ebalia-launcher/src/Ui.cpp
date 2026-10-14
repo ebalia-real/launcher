@@ -22,6 +22,12 @@ public:
 ArtCache &artCache(){static QPointer<ArtCache> cache;if(!cache)cache=new ArtCache;return *cache;}
 }
 QPixmap Ui::cachedArt(const QString &resource,QSize bounds){auto p=artCache().cache(bounds).object(artKey(resource,bounds));return p?*p:QPixmap();}
+QThreadPool *Ui::backgroundPool(){
+    // Closing the launcher drops what has not started and waits a moment for the rest; it never waits on a slow lookup.
+    static QThreadPool *pool=[]{auto p=new QThreadPool;p->setMaxThreadCount(3);p->setThreadPriority(QThread::LowPriority);
+        QObject::connect(qApp,&QCoreApplication::aboutToQuit,[p]{p->clear();p->waitForDone(3000);});return p;}();
+    return pool;
+}
 void Ui::loadArt(const QString &resource,QSize bounds,QObject *receiver,std::function<void(const QPixmap &)> ready){
     if(!receiver||resource.isEmpty()||bounds.isEmpty())return;
     auto &cache=artCache();const auto key=artKey(resource,bounds);

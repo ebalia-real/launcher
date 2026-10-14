@@ -58,7 +58,7 @@ void SkinsPage::refresh(){m_list->clear();m_list->setIconSize(QSize(32,32));
         for(int n=0;n<m_skins.size();++n)if(m_skins[n].toObject()["current"].toBool())return;
         m_skins.prepend(QJsonObject{{"name",name+" · "+key("Current skin")},{"file",file},{"variant",variant},{"current",true}});
         m_list->insertItem(0,new QListWidgetItem(headIcon(skin),name+" · "+key("Current skin")+" (Microsoft)"));m_list->setCurrentRow(0);});
-    watcher->setFuture(QtConcurrent::run([uuid,file]{return SkinManager::fetchProfileSkin(uuid,file);}));
+    watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[uuid,file]{return SkinManager::fetchProfileSkin(uuid,file);}));
 }
 void SkinsPage::showSkin(){int index=m_list->currentRow();const bool valid=index>=0&&index<m_skins.size();if(m_remove)m_remove->setEnabled(valid&&m_skins[index].toObject().contains("id")&&!m_skins[index].toObject()["current"].toBool());if(!valid)return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setSkin(image,o["variant"].toString()=="slim");m_details->setText(o["name"].toString());}
 void SkinsPage::removeSkin(){

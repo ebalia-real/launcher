@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QHash>
 #include <QSet>
+#include <QCache>
 #include <QTimer>
 #include <QPixmap>
 #include <functional>
@@ -129,7 +130,8 @@ private:
     AccountManager *m_accounts;
     JavaRunner *m_java;
     QNetworkAccessManager *m_images=nullptr;
-    QHash<QString,QPixmap> m_imageCache;
+    // Downloaded pictures by address and width, up to about 160 MB: full-size gallery pictures are large.
+    QCache<QString,QPixmap> m_imageCache{160*1024};
     QList<McVersion> m_manifest;
     QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr,*m_accountList=nullptr;
     QStackedWidget *m_pages=nullptr;

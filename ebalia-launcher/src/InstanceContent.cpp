@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -82,7 +83,14 @@ QList<InstanceContent::Entry> InstanceContent::list(const QString &instance,cons
     return out;
 }
 namespace {
-QString sha1Of(const QString &file){QFile in(file);QCryptographicHash sha(QCryptographicHash::Sha1);if(!in.open(QIODevice::ReadOnly)||!sha.addData(&in))return {};return QString::fromLatin1(sha.result().toHex());}
+// A file's SHA-1, remembered by path, size and date for the session: big jars and shader packs are read once.
+QString sha1Of(const QString &file){
+    static QMutex mutex;static QHash<QString,QString> known;
+    const QFileInfo info(file);const auto key=info.absoluteFilePath()+"|"+QString::number(info.size())+"|"+QString::number(info.lastModified().toMSecsSinceEpoch());
+    {QMutexLocker lock(&mutex);if(const auto it=known.constFind(key);it!=known.cend())return *it;}
+    QFile in(file);QCryptographicHash sha(QCryptographicHash::Sha1);if(!in.open(QIODevice::ReadOnly)||!sha.addData(&in))return {};
+    const auto hash=QString::fromLatin1(sha.result().toHex());QMutexLocker lock(&mutex);known.insert(key,hash);return hash;
+}
 // The project of a file with this SHA-1, from Modrinth or the cache: "<hash>.project" holds it, empty when Modrinth
 // does not know the file. A failed connection is not remembered, so the next look asks again.
 QString projectOf(const QString &hash,const QString &cache){
@@ -91,7 +99,7 @@ QString projectOf(const QString &hash,const QString &cache){
     if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return {};
     auto remember=[&](const QString &project){QDir().mkpath(cache);QFile mark(cached);if(mark.open(QIODevice::WriteOnly))mark.write(project.toLatin1());return project;};
     try{
-        const auto project=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"))).object()["project_id"].toString();
+        const auto project=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"),{},1,15000)).object()["project_id"].toString();
         return remember(QRegularExpression("^[A-Za-z0-9]+$").match(project).hasMatch()?project:QString());
     }catch(const std::exception &e){if(QString::fromUtf8(e.what()).contains("Not Found",Qt::CaseInsensitive))return remember({});}
     return {};
@@ -106,8 +114,8 @@ QImage InstanceContent::modrinthIcon(const QString &file,const QString &cache){
     if(QFile::exists(cached)){image.load(cached);return image;}if(QFile::exists(cached+".none")||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return image;
     const auto project=projectOf(hash,cache);if(project.isEmpty())return image;
     try{
-        const QUrl icon(QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/project/"+project))).object()["icon_url"].toString());
-        if(icon.scheme()=="https"&&image.loadFromData(ModRepository::fetch(icon))){image=image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation);image.save(cached,"PNG");return image;}
+        const QUrl icon(QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/project/"+project),{},1,15000)).object()["icon_url"].toString());
+        if(icon.scheme()=="https"&&image.loadFromData(ModRepository::fetch(icon,{},1,15000))){image=image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation);image.save(cached,"PNG");return image;}
         QFile none(cached+".none");none.open(QIODevice::WriteOnly); // on Modrinth, without an icon
     }catch(...){}
     return {};

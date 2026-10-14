@@ -196,7 +196,9 @@ public:
         m_layout.setSingleShot(true);m_layout.setInterval(80);
         QObject::connect(&m_layout,&QTimer::timeout,this,[this]{document()->markContentsDirty(0,document()->characterCount());viewport()->update();});
     }
-    void showPage(const QString &html) {++m_generation;m_shown.clear();document()->clear();setHtml(html);verticalScrollBar()->setValue(0);}
+    // The previous page's pictures are let go (the launcher's picture cache keeps the recent ones), so going through many
+    // mods does not keep every picture in memory.
+    void showPage(const QString &html) {++m_generation;m_shown.clear();m_images.clear();m_pending.clear();document()->clear();setHtml(html);verticalScrollBar()->setValue(0);}
 protected:
     QVariant loadResource(int type,const QUrl &name) override {
         if(type!=QTextDocument::ImageResource||name.scheme()!="https")return QTextBrowser::loadResource(type,name);
@@ -230,23 +232,26 @@ public:
     using QWidget::QWidget;
     std::function<void()> clicked;
     void setImage(const QPixmap &image) {
-        m_image=image;m_blur={};
+        m_image=image;m_blur={};m_scaledFor={};
         if(!image.isNull()){m_blur=image.scaled(qMax(1,image.width()/24),qMax(1,image.height()/24),Qt::IgnoreAspectRatio,Qt::SmoothTransformation);}
         setVisible(!image.isNull());update();
     }
 protected:
     void paintEvent(QPaintEvent *) override {
         if(m_image.isNull())return;
-        QPainter p(this);p.setRenderHint(QPainter::SmoothPixmapTransform);p.setRenderHint(QPainter::Antialiasing);
+        // Scaled once per size, for the screen's pixel ratio, not at every repaint: the picture can be the full-size original.
+        const qreal ratio=devicePixelRatioF();const auto target=(QSizeF(size())*ratio).toSize();
+        if(m_scaledFor!=target){m_scaledFor=target;
+            m_back=Ui::cover(m_blur.scaled(target,Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation),target);m_back.setDevicePixelRatio(ratio);
+            m_front=m_image.scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation);m_front.setDevicePixelRatio(ratio);}
+        QPainter p(this);p.setRenderHint(QPainter::Antialiasing);
         QPainterPath clip;clip.addRoundedRect(QRectF(rect()).adjusted(0,0,0,12),12,12);p.setClipPath(clip);
-        p.drawPixmap(rect(),Ui::cover(m_blur.scaled(size(),Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation),size()));
-        p.fillRect(rect(),QColor(10,10,12,150));
-        const auto shown=m_image.scaled(size(),Qt::KeepAspectRatio,Qt::SmoothTransformation);
-        p.drawPixmap(QPoint((width()-shown.width())/2,(height()-shown.height())/2),shown);
+        p.drawPixmap(QPointF(0,0),m_back);p.fillRect(rect(),QColor(10,10,12,150));
+        const auto shown=m_front.deviceIndependentSize();p.drawPixmap(QPointF((width()-shown.width())/2,(height()-shown.height())/2),m_front);
     }
 private:
     void mousePressEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton&&clicked)clicked();}
-    QPixmap m_image,m_blur;
+    QPixmap m_image,m_blur,m_back,m_front;QSize m_scaledFor;
 };
 // A mod's pictures, one at a time and as large as the window allows, with the previous / next buttons and arrow keys.
 class ModGallery:public QDialog {
@@ -279,7 +284,8 @@ private:
             m_fetch(m_previews[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted&&!self->m_sharp){self->m_image=image;self->fit();}});
         m_fetch(m_urls[wanted],[self,wanted](const QPixmap &image){if(self&&self->m_index==wanted){self->m_image=image;self->m_sharp=true;self->fit();}});
     }
-    void fit() {if(!m_image.isNull())m_picture->setPixmap(m_image.scaled(m_picture->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation));}
+    void fit() {if(m_image.isNull())return;const qreal ratio=m_picture->devicePixelRatioF();
+        auto shown=m_image.scaled((QSizeF(m_picture->size())*ratio).toSize(),Qt::KeepAspectRatio,Qt::SmoothTransformation);shown.setDevicePixelRatio(ratio);m_picture->setPixmap(shown);}
     QStringList m_previews,m_urls;int m_index=0;QPixmap m_image;bool m_sharp=false;std::function<void(const QString &,std::function<void(const QPixmap &)>)> m_fetch;
     QLabel *m_picture=nullptr,*m_counter=nullptr;QPushButton *m_previous=nullptr,*m_next=nullptr;
 };
@@ -512,7 +518,7 @@ QWidget *MainWindow::buildExplore() {
         for(int n=0;n<urls.size();++n){const auto url=urls[n].toString();if(!url.startsWith("https://"))continue;const auto original=full.at(n).toString();
             auto item=new QListWidgetItem(gallery);item->setData(Qt::UserRole,url);item->setData(Qt::UserRole+1,original.startsWith("https://")?original:url);item->setSizeHint(QSize(136,80));
             loadImage(url,[this,gallery,url,id](const QPixmap &image){auto c=m_results->currentItem();if(!c||c->data(Qt::UserRole).toJsonObject()["project_id"].toString()!=id)return;
-                for(int n=0;n<gallery->count();++n)if(gallery->item(n)->data(Qt::UserRole).toString()==url)gallery->item(n)->setIcon(QIcon(Ui::cover(image,QSize(128,72),6)));},640);}
+                for(int n=0;n<gallery->count();++n)if(gallery->item(n)->data(Qt::UserRole).toString()==url)gallery->item(n)->setIcon(QIcon(Ui::cover(image,QSize(256,144),12)));},640);}
         gallery->setVisible(gallery->count()>0);};
     auto bodyView=new ModPageView;bodyView->fetch=[this](const QString &url,std::function<void(const QPixmap &)> done){loadImage(url,std::move(done),1400);};bodyView->setObjectName("modPreviewBody");bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);bodyView->setOpenExternalLinks(true);bodyView->setFrameShape(QFrame::NoFrame);bodyView->setStyleSheet("background:transparent;padding:0 12px;");bodyView->document()->setDefaultStyleSheet("a{color:#6fd15b;} h1,h2,h3{margin-top:10px;} hr{color:#2b2b30;}");pl->addWidget(bodyView,1);
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,0,16,0);actions->setSpacing(8);pl->addLayout(actions);
@@ -862,7 +868,7 @@ void MainWindow::markInstalled(){
     auto watcher=new QFutureWatcher<QSet<QString>>(this);
     connect(watcher,&QFutureWatcher<QSet<QString>>::finished,this,[this,watcher,dir]{const auto found=watcher->result();watcher->deleteLater();
         if(!found.isEmpty()&&m_target&&m_target->currentData().toString()==dir)showInstalled(ModRepository::installedProjects(dir)+found);});
-    watcher->setFuture(QtConcurrent::run([dir,cache=m_mc->mcDir()+"/cache/mod-icons"]{
+    watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[dir,cache=m_mc->mcDir()+"/cache/mod-icons"]{
         QSet<QString> ids;for(const QString folder:{"resourcepacks","shaderpacks"})for(const auto &file:QDir(dir+"/"+folder).entryList({"*.zip"},QDir::Files))
             if(const auto id=InstanceContent::modrinthProject(dir+"/"+folder+"/"+file,cache);!id.isEmpty())ids.insert(id);
         return ids;}));
@@ -1327,15 +1333,23 @@ void MainWindow::manageMods(){
     auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QDialog d(this);d.setObjectName("modsWindow");d.setWindowTitle(i.name+" · Mods");Ui::fitToScreen(&d,{820,580});QVBoxLayout lay(&d);lay.setContentsMargins(20,18,20,18);lay.setSpacing(12);
     label(i.name+" · Mods",&lay,"sectionTitle",false);QListWidget list;list.setObjectName("modList");list.setIconSize(QSize(22,22));lay.addWidget(&list,1);
+    // Pictures already found stay for the session, by file (name without ".disabled", size and date): reopening the
+    // window, removing a mod or turning one off shows them at once instead of reading every jar again.
+    static QHash<QString,QImage> pictures;
+    auto alive=std::make_shared<std::atomic<bool>>(true);
+    auto show=[](QListWidgetItem *item,QImage image,bool off){if(image.isNull())return;if(off)image=image.convertToFormat(QImage::Format_Grayscale8);
+        item->setIcon(QIcon(QPixmap::fromImage(image.scaled(64,64,Qt::KeepAspectRatio,image.width()<=32?Qt::FastTransformation:Qt::SmoothTransformation))));};
     auto refresh=[&]{list.clear();list.setIconSize({32,32});
         for(const auto &f:QDir(i.dir+"/mods").entryList({"*.jar","*.jar.disabled"},QDir::Files)){
             const bool off=f.endsWith(".disabled");auto item=new QListWidgetItem(Ui::icon("puzzle",off?QColor(110,110,118):Ui::accent()),f,&list);if(off)item->setForeground(QColor(130,130,138));
-            // Each mod's own picture, read from its jar in the background.
+            const QFileInfo info(i.dir+"/mods/"+f);const auto key=i.dir+"/mods/"+(off?f.chopped(9):f)+"|"+QString::number(info.size())+"|"+QString::number(info.lastModified().toMSecsSinceEpoch());
+            if(const auto known=pictures.constFind(key);known!=pictures.cend()){show(item,*known,off);continue;}
+            // Each mod's own picture, read from its jar on the background threads (they never delay what you click).
             auto watcher=new QFutureWatcher<QImage>(&list);const auto file=f;
-            connect(watcher,&QFutureWatcher<QImage>::finished,&list,[watcher,&list,file,off]{auto image=watcher->result();watcher->deleteLater();if(image.isNull())return;
-                if(off)image=image.convertToFormat(QImage::Format_Grayscale8);
-                for(int n=0;n<list.count();++n)if(list.item(n)->text()==file)list.item(n)->setIcon(QIcon(QPixmap::fromImage(image.scaled(64,64,Qt::KeepAspectRatio,image.width()<=32?Qt::FastTransformation:Qt::SmoothTransformation))));});
-            watcher->setFuture(QtConcurrent::run([path=i.dir+"/mods/"+f,cache=m_mc->mcDir()+"/cache/mod-icons"]{
+            connect(watcher,&QFutureWatcher<QImage>::finished,&list,[watcher,&list,file,off,key,show]{const auto image=watcher->result();watcher->deleteLater();if(image.isNull())return;pictures.insert(key,image);
+                for(int n=0;n<list.count();++n)if(list.item(n)->text()==file)show(list.item(n),image,off);});
+            watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[path=info.filePath(),cache=m_mc->mcDir()+"/cache/mod-icons",alive]{
+                if(!*alive)return QImage(); // the window closed before its turn came
                 // The picture inside the jar, or else the project's icon on Modrinth.
                 QImage image;image.loadFromData(ModCompat::iconData(path));return image.isNull()?InstanceContent::modrinthIcon(path,cache):image;}));
         }};refresh();
@@ -1346,7 +1360,7 @@ void MainWindow::manageMods(){
     button(text("Agregar JAR local","Add local JAR","Adicionar JAR local"),folderRow,[&]{for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"Mods (*.jar)")){QDir().mkpath(i.dir+"/mods");if(!QFile::copy(f,i.dir+"/mods/"+QFileInfo(f).fileName()))error(text("El archivo ya existe o no se puede copiar.","The file already exists or cannot be copied.","O arquivo já existe ou não pode ser copiado."));}refresh();},&d,false,"plus");
     auto remove=button(text("Quitar mod","Remove mod","Remover mod"),row,[&]{if(!list.currentItem())return;auto name=list.currentItem()->text();QDir().mkpath(i.dir+"/removed-mods");if(!QFile::rename(i.dir+"/mods/"+name,i.dir+"/removed-mods/"+QString::number(QDateTime::currentMSecsSinceEpoch())+"-"+name))error(text("No se pudo mover el archivo.","Could not move the file.","Não foi possível mover o arquivo."));refresh();},&d,false,"trash-2");remove->setProperty("danger",true);
     row->addStretch();folderRow->addStretch();button(text("Explorar mods compatibles","Find compatible mods","Buscar mods compatíveis"),folderRow,[&]{d.accept();showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));searchMods();},&d,true,"compass");
-    Ui::openWindow(d);refreshInstances();
+    Ui::openWindow(d);*alive=false;refreshInstances();
 }
 void MainWindow::manageContent(const QString &folder){
     auto i=selected();if(i.dir.isEmpty())return;
@@ -1361,8 +1375,9 @@ void MainWindow::manageContent(const QString &folder){
             :shaderMod?text("Se usa un solo shader a la vez.","One shader pack is used at a time.","Um shader é usado por vez.")
             :text("Esta instancia no tiene Iris ni Oculus: los shaders no se van a cargar hasta instalarlo.","This instance has neither Iris nor Oculus: shaders will not load until you install it.","Esta instância não tem Iris nem Oculus: os shaders não carregam até instalá-lo."))
         :text("Los mundos quitados se guardan en removed-worlds, dentro de la carpeta de la instancia.","Removed worlds are kept in removed-worlds, inside the instance folder.","Os mundos removidos ficam em removed-worlds, dentro da pasta da instância."),&lay,"muted");
-    // Pictures and descriptions already read, so turning a pack on or off does not read every archive again.
-    QHash<QString,InstanceContent::Entry> known;
+    // Pictures and descriptions already read stay for the session, by path, size and date: turning a pack on or off or
+    // opening the window again does not read every archive again.
+    static QHash<QString,InstanceContent::Entry> known;auto alive=std::make_shared<std::atomic<bool>>(true);
     QListWidget list;list.setObjectName("contentList");list.setIconSize({48,48});lay.addWidget(&list,1);
     auto detail=[packs,worlds](const InstanceContent::Entry &e){
         if(worlds)return InstanceText::lastPlayed(e.modified.toSecsSinceEpoch());
@@ -1377,15 +1392,16 @@ void MainWindow::manageContent(const QString &folder){
             auto item=new QListWidgetItem(Ui::icon(symbol,e.active||worlds?Ui::accent():dim),e.title+"\n"+detail(e),&list);item->setData(Qt::UserRole,e.file);item->setData(Qt::UserRole+1,e.active);
             if(e.active){auto font=item->font();font.setBold(true);item->setFont(font);}
             if(e.file==keep)list.setCurrentItem(item);
-            if(const auto cached=known.value(e.file);!cached.file.isEmpty()&&cached.modified==e.modified){
+            const auto path=i.dir+"/"+folder+"/"+e.file;
+            if(const auto cached=known.value(path);!cached.file.isEmpty()&&cached.modified==e.modified&&cached.size==e.size){
                 auto shown=e;shown.description=cached.description;if(!cached.icon.isNull())item->setIcon(icon(cached.icon));item->setText(e.title+"\n"+detail(shown));continue;}
             // The pack's own picture and description, or the world's icon, read in the background.
             auto watcher=new QFutureWatcher<InstanceContent::Entry>(&list);
-            connect(watcher,&QFutureWatcher<InstanceContent::Entry>::finished,&list,[watcher,&list,&known,detail,icon]{const auto e=watcher->result();watcher->deleteLater();known.insert(e.file,e);
+            connect(watcher,&QFutureWatcher<InstanceContent::Entry>::finished,&list,[watcher,&list,path,detail,icon]{const auto e=watcher->result();watcher->deleteLater();known.insert(path,e);
                 for(int n=0;n<list.count();++n)if(auto item=list.item(n);item->data(Qt::UserRole).toString()==e.file){
                     auto shown=e;shown.active=item->data(Qt::UserRole+1).toBool(); // turned on or off since it was read
                     if(!e.icon.isNull())item->setIcon(icon(e.icon));item->setText(e.title+"\n"+detail(shown));}});
-            watcher->setFuture(QtConcurrent::run([dir=i.dir,folder,e,cache=m_mc->mcDir()+"/cache/mod-icons"]{return InstanceContent::describe(dir,folder,e,cache);}));
+            watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[dir=i.dir,folder,e,cache=m_mc->mcDir()+"/cache/mod-icons",alive]{return *alive?InstanceContent::describe(dir,folder,e,cache):e;}));
         }
         if(!list.currentItem())list.setCurrentRow(0);};
     auto current=[&]{auto item=list.currentItem();return item?item->data(Qt::UserRole).toString():QString();};
@@ -1428,7 +1444,7 @@ void MainWindow::manageContent(const QString &folder){
     if(shaders&&!shaderMod&&i.loader!="vanilla"){const bool forge=i.loader=="forge";const QString name=forge?"Oculus":"Iris Shaders";
         button(text("Instalar %1","Install %1","Instalar %1").arg(name),folderRow,[&,forge,name]{d.accept();installProjects(QJsonArray{QJsonObject{{"project_id",forge?"GchcoXML":"YL57xq9U"},{"title",name}}},"mod");},&d,false,"download");}
     if(!worlds)button(packs?text("Descargar paquetes de recursos","Download resource packs","Baixar pacotes de recursos"):text("Descargar shaders","Download shaders","Baixar shaders"),folderRow,[&]{d.accept();discover(packs?"resourcepack":"shader",i.dir);},&d,true,"download");
-    refresh({});Ui::openWindow(d);refreshInstances();
+    refresh({});Ui::openWindow(d);*alive=false;refreshInstances();
 }
 void MainWindow::savePack(){auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}bool ok;auto name=QInputDialog::getText(this,text("Guardar pack","Save pack","Salvar pack"),text("Nombre del pack","Pack name","Nome do pack"),QLineEdit::Normal,i.name,&ok);if(!ok||name.trimmed().isEmpty())return;auto root=m_root;work(text("Identificando tus mods en Modrinth…","Identifying your mods on Modrinth…","Identificando seus mods no Modrinth…"),[root,i,name]{ModRepository repo(root);auto p=repo.capture(i.dir,name);repo.savePack(p);return p;},[this](QJsonObject){refreshPacks();showPage(Packs);});}
 void MainWindow::applyPack(){
@@ -1476,7 +1492,7 @@ void MainWindow::searchMods(int offset){
         for(const auto &v:hits){
             auto p=v.toObject();auto item=new QListWidgetItem(Ui::icon("puzzle",dim),p["title"].toString()+"  ·  "+p["author"].toString()+"\n"+p["description"].toString(),m_results);item->setData(Qt::UserRole,p);item->setToolTip(p["description"].toString());
             const auto url=p["icon_url"].toString();
-            loadImage(url,[list=QPointer<QListWidget>(m_results),url](const QPixmap &icon){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toJsonObject()["icon_url"].toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(icon,QSize(88,88),14)));});
+            loadImage(url,[list=QPointer<QListWidget>(m_results),url](const QPixmap &icon){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toJsonObject()["icon_url"].toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(icon,QSize(176,176),28)));});
         }
         markInstalled();if(offset==0&&m_results->count()>0)m_results->setCurrentRow(0);
         if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));};
@@ -1492,7 +1508,7 @@ void MainWindow::refreshAvatars(bool force){
     if(pending.isEmpty())return;
     auto root=m_root;auto watcher=new QFutureWatcher<QMap<QString,QImage>>(this);
     connect(watcher,&QFutureWatcher<QMap<QString,QImage>>::finished,this,[this,watcher]{const auto heads=watcher->result();watcher->deleteLater();for(auto it=heads.begin();it!=heads.end();++it)m_accounts->setSkinHead(it.key(),it.value());});
-    watcher->setFuture(QtConcurrent::run([root,pending]{
+    watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[root,pending]{
         QMap<QString,QImage> heads;
         for(const auto &a:pending){
             QImage skin;
@@ -1562,13 +1578,20 @@ void MainWindow::account(bool microsoft){
 }
 void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth,bool urgent){
     const auto key=url+"@"+QString::number(maxWidth);
-    if(!url.startsWith("https://"))return;if(auto it=m_imageCache.constFind(key);it!=m_imageCache.cend()){done(*it);return;}
+    if(!url.startsWith("https://"))return;if(auto known=m_imageCache.object(key)){done(*known);return;}
     if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;
     if(!m_images){m_images=new QNetworkAccessManager(this);m_images->setTransferTimeout(20000);auto cache=new QNetworkDiskCache(m_images);cache->setCacheDirectory(m_root+"/cache/images");cache->setMaximumCacheSize(80*1024*1024);m_images->setCache(cache);}
     QNetworkRequest request{QUrl(url)};request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/4.0");request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::NoLessSafeRedirectPolicy);request.setAttribute(QNetworkRequest::CacheLoadControlAttribute,QNetworkRequest::PreferCache);
     if(urgent)request.setPriority(QNetworkRequest::HighPriority);
     auto reply=m_images->get(request);
-    connect(reply,&QNetworkReply::finished,this,[this,reply,key,done,maxWidth]{reply->deleteLater();QPixmap pixmap;if(reply->error()==QNetworkReply::NoError)pixmap.loadFromData(reply->readAll());if(pixmap.isNull())return;if(pixmap.width()>maxWidth)pixmap=pixmap.scaledToWidth(maxWidth,Qt::SmoothTransformation);m_imageCache.insert(key,pixmap);done(pixmap);});
+    connect(reply,&QNetworkReply::finished,this,[this,reply,key,done,maxWidth]{
+        reply->deleteLater();if(reply->error()!=QNetworkReply::NoError)return;
+        // Decoded and scaled on a worker: a full-size picture would otherwise hold the window for a moment.
+        auto watcher=new QFutureWatcher<QImage>(this);
+        connect(watcher,&QFutureWatcher<QImage>::finished,this,[this,watcher,key,done]{const auto image=watcher->result();watcher->deleteLater();if(image.isNull())return;
+            auto pixmap=QPixmap::fromImage(image);m_imageCache.insert(key,new QPixmap(pixmap),qMax<qsizetype>(1,image.sizeInBytes()/1024));done(pixmap);});
+        watcher->setFuture(QtConcurrent::run([bytes=reply->readAll(),maxWidth]{QImage image;if(!image.loadFromData(bytes))return image;return image.width()>maxWidth?image.scaledToWidth(maxWidth,Qt::SmoothTransformation):image;}));
+    });
 }
 void MainWindow::refreshNews(bool network){
     auto render=[this](QJsonObject o){

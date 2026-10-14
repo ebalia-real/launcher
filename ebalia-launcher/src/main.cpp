@@ -64,6 +64,8 @@ int main(int argc,char **argv){
     auto checkpoint=[](const char *step){if(std::getenv("EBALIA_TEST_LOG"))std::fprintf(stderr,"[start] %s\n",step);};
     QApplication::setOrganizationName("EBALIA");QApplication::setApplicationName("EBALIA Launcher");QApplication::setApplicationVersion(EBALIA_APP_VERSION);
     checkpoint("application");QApplication app(argc,argv);checkpoint("application ready");
+    // Closing: downloads and lookups still running stop at once, so the process ends with its window.
+    QObject::connect(&app,&QCoreApplication::aboutToQuit,[]{ModRepository::cancelAll();});
     if(const auto portable=portableRoot();!portable.isEmpty()&&QDir().mkpath(portable)) {
         setEnvironment("EBALIA_DATA_DIR",portable);setEnvironment("EBALIA_PORTABLE","1");
         QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,portable+"/settings");

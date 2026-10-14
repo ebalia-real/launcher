@@ -29,7 +29,11 @@ public:
     // The Discover projects an instance already has, by project id: mods installed by the launcher (mods.json, also
     // when turned off) and resource or shader packs (packs.json), while their file is still in its folder.
     static QSet<QString> installedProjects(const QString &instance);
-    static QByteArray fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers = {});
+    // attempts and timeout: lookups nobody waits on (icons) give up sooner, so they never hold the launcher when it closes.
+    static QByteArray fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers = {}, int attempts = 3, int timeout = 70000);
+    // The launcher is closing: every fetch running on any thread stops now and new ones fail, so closing never waits on
+    // a slow server.
+    static void cancelAll();
     // EBALIA_CURSEFORGE_API_KEY, then Provider settings, then the key built into this copy (empty when none).
     static QString curseForgeKey();
 private:

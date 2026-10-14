@@ -1,5 +1,14 @@
 # 1.1.9
 
+- Faster: reading mod icons, pack pictures and descriptions, finding packs on Modrinth and skin heads run on a few
+  background threads of their own and are remembered for the session. Before, opening the Mods window took every
+  processor thread for seconds and anything you did next (installing, searching, removing, opening another window)
+  waited behind it; now it starts at once. Reopening a window, removing a mod or turning one off no longer reads every
+  file again.
+- Closing the launcher ends it at once: downloads and lookups still running stop instead of keeping the process alive
+  for minutes on a slow connection.
+- Pictures from the internet are decoded off the window's thread, the cache of downloaded pictures has a limit, and
+  the mod page's cover is scaled once per size; pictures are sharp on scaled screens.
 - Discover says what the instance already has: installed mods, resource packs and shaders show "Already installed"
   in the list, the Install button says so too, and installing several leaves them out. Packs are recorded when they
   install; those added by hand or before are recognised through Modrinth. A pack or mod removed from its folder can
