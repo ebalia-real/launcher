@@ -30,7 +30,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v1.2.6_06",
+      "origin": "archive",
+      "about": "Based on Alpha 1.2.6, the last Alpha of Minecraft before Beta (December 2010): the classic title screen, dense forests, beaches and the original textures.",
+      "installed_size": 99957448,
+      "screenshots": 3
     },
     {
       "id": "alpha_1.2.7",
@@ -62,7 +67,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v1.2.7",
+      "origin": "remake",
+      "about": "An Alpha that never came out, recreated by EBALIA: a title logo made of planks, darker leaves and textures of its own.",
+      "installed_size": 84115273,
+      "screenshots": 3
     },
     {
       "id": "alpha_1.2.6_04",
@@ -94,7 +104,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v1.2.6_04",
+      "origin": "remake",
+      "about": "A disturbing remake by EBALIA: a glitched logo that reads «missingno», a «Null Specifications» copyright and worlds that begin in the snow, at night. It comes with a note you should not read.",
+      "installed_size": 204064842,
+      "screenshots": 3
     },
     {
       "id": "alpha_herobrine_test",
@@ -126,7 +141,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha Herobrine Test",
+      "origin": "rescued",
+      "about": "A rescued Alpha build called «Herobrine Test»: washed-out grass and a hotbar that starts with tools, torches and blocks.",
+      "installed_size": 72523663,
+      "screenshots": 3
     },
     {
       "id": "minecraft_a1.1.1",
@@ -166,7 +186,12 @@
           "net.minecraft.launchwrapper.AlphaVanillaTweaker"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v1.1.1",
+      "origin": "rescued",
+      "about": "An early Alpha from 2010, rescued by EBALIA: the old menu with the tutorial level button, blocky clouds and lakes surrounded by sand.",
+      "installed_size": 29799485,
+      "screenshots": 3
     },
     {
       "id": "alpha_d3ath_exe",
@@ -198,7 +223,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha D3ATH.EXE",
+      "origin": "rescued",
+      "about": "A creepypasta Alpha: grey menus without splash text and a window title written in hexadecimal that is better left untranslated.",
+      "installed_size": 82053645,
+      "screenshots": 3
     },
     {
       "id": "alpha_1.0.16.05_20",
@@ -242,7 +272,12 @@
           "launcher onesix",
           "launch"
         ]
-      }
+      },
+      "game": "Minecraft Alpha v1.0.16.05_20 Cypress",
+      "origin": "rescued",
+      "about": "A heavily modified Alpha that calls itself «Cypress»: menus of its own (Play, Quickload, Visuals, Extensions), yellow grass, flowers floating on the water and a giant boss with its own health bar.",
+      "installed_size": 425929646,
+      "screenshots": 3
     },
     {
       "id": "alpha_0.0.0_remastered",
@@ -274,7 +309,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v0.0.0",
+      "origin": "remake",
+      "about": "A remake of the mythical «Alpha v0.0.0»: black menus, a logo full of noise, a bleached world and a bloody arm. It brings sounds of its own.",
+      "installed_size": 927292762,
+      "screenshots": 3
     },
     {
       "id": "alpha_1.3",
@@ -306,7 +346,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Alpha v1.3 TESTIFICATE",
+      "origin": "remake",
+      "about": "An Alpha 1.3 «TESTIFICATE» that never came out, recreated by EBALIA: a cobblestone logo and a message warning that this is a pre-beta testing version.",
+      "installed_size": 76810187,
+      "screenshots": 3
     },
     {
       "id": "ghost",
@@ -338,7 +383,13 @@
           "${username}"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft Ghost",
+      "origin": "rescued",
+      "about": "The creepypasta by Locod: menus that read «Solo», «Die all» and «Choose the world of your death», a version number that changes while you play and a story about a creature called Loghost. Not for very sensitive players.",
+      "installed_size": 133090550,
+      "screenshots": 3,
+      "credit": "Locod"
     },
     {
       "id": "minecraft_1_li02",
@@ -357,6 +408,7 @@
         "java": 8,
         "workingDir": "",
         "classpath": [
+          "@patch/minecraft_1_li02.jar",
           "@lwjgl2",
           "bin/minecraft.jar"
         ],
@@ -369,7 +421,12 @@
           "${username}"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft 1.1",
+      "origin": "remake",
+      "about": "A corrupted Minecraft 1.1, recreated by EBALIA: a broken logo, blank buttons and menus that slip away from the mouse.",
+      "installed_size": 91200599,
+      "screenshots": 3
     },
     {
       "id": "nsss",
@@ -417,7 +474,12 @@
           "launcher onesix",
           "launch"
         ]
-      }
+      },
+      "game": "Minecraft Alpha v1.1.11_111",
+      "origin": "rescued",
+      "about": "A horror version that reads «Alpha v1.1.11_111»: a light blue logo and a world setup screen with seasons, commands and world types.",
+      "installed_size": 3784292,
+      "screenshots": 3
     },
     {
       "id": "undef_554e",
@@ -457,7 +519,12 @@
           "${username}"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft UNDEFINE",
+      "origin": "rescued",
+      "about": "«554e444546494e45» is UNDEFINE written in hexadecimal: it starts like an old terminal, fills the screen with garbage and shows everything through a VHS filter.",
+      "installed_size": 73168564,
+      "screenshots": 4
     },
     {
       "id": "1.1_patch_1",
@@ -490,7 +557,12 @@
           "-"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft 1.1 Patch 1",
+      "origin": "rescued",
+      "about": "Minecraft 1.1 with a patch: a blurred world behind the title screen, newer textures and hints like «Press E to open your inventory».",
+      "installed_size": 69039495,
+      "screenshots": 3
     },
     {
       "id": "minecraft_1.7.10",
@@ -548,7 +620,12 @@
           "${username}"
         ],
         "natives": "lwjgl2"
-      }
+      },
+      "game": "Minecraft 1.7.20",
+      "origin": "remake",
+      "about": "A horror remake of Minecraft 1.7.10 by EBALIA that turns into «1.7.20»: a glitching logo, buttons named after errors (SocketException, java.security) and darker grass.",
+      "installed_size": 1164555628,
+      "screenshots": 3
     }
   ],
   "global_resources": [

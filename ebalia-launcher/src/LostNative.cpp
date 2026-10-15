@@ -59,9 +59,25 @@ QString inside(const QString &root,const QString &relative){
     return QDir::cleanPath(root+"/"+clean);
 }
 QString nativesDir(const QString &installDir){return installDir+"/.ebalia/natives-"+LostNative::system();}
+// "@patch/<file>": a jar of fixed classes bundled with the launcher, copied into the version when it is prepared.
+QString patchName(const QString &entry){
+    const auto name=entry.mid(7);
+    if(name.isEmpty()||name.contains('/')||name.contains('\\')||name.startsWith('.')||!name.endsWith(".jar"))fail("Invalid patch in the lost version description: "+entry);
+    return name;
+}
+QString patchFile(const QString &installDir,const QString &entry){return installDir+"/.ebalia/patches/"+patchName(entry);}
 }
 namespace LostNative {
 bool available(const QJsonObject &spec){return !spec["mainClass"].toString().isEmpty();}
+QStringList needed(const QJsonObject &spec){
+    const auto workingDir=spec["workingDir"].toString();
+    if(!available(spec)||workingDir.isEmpty()||QDir::cleanPath(workingDir)==".")return {};
+    QStringList out{workingDir};
+    for(const auto &entry:strings(spec["classpath"]))if(!entry.startsWith('@'))out<<entry;
+    out<<strings(spec["keep"]);
+    for(auto &path:out){inside("/",path);path=QDir::cleanPath(path);} // the same checks as when the game starts
+    out.removeDuplicates();return out;
+}
 QString system(){
 #if defined(Q_OS_WIN)
     return "windows";
@@ -82,6 +98,14 @@ void prepare(const QJsonObject &spec,const QString &installDir,const QString &li
     for(const auto &file:files){
         if(progress)progress(done++,files.size());
         Download::file(QUrl(QString("https://libraries.minecraft.net/")+file.path),librariesDir+"/"+file.path,QByteArray(file.sha1),QCryptographicHash::Sha1);
+    }
+    for(const auto &entry:entries){
+        if(!entry.startsWith("@patch/"))continue;
+        QFile bundled(":/lost/patches/"+patchName(entry));if(!bundled.open(QIODevice::ReadOnly))fail(QString("This version of the launcher lacks a fix the lost version needs: %1").arg(entry));
+        const auto fix=bundled.readAll();const auto target=patchFile(installDir,entry);
+        QFile current(target);if(current.open(QIODevice::ReadOnly)&&current.readAll()==fix)continue;current.close();
+        QDir().mkpath(QFileInfo(target).absolutePath());QSaveFile out(target);
+        if(!out.open(QIODevice::WriteOnly)||out.write(fix)!=fix.size()||!out.commit())fail("Could not prepare the native libraries.");
     }
     if(natives){
         // Extract into a fresh folder so a moved or copied installation never keeps another system's files.
@@ -114,6 +138,7 @@ Command command(const QJsonObject &spec,const QString &installDir,const QString 
     for(const auto &entry:strings(spec["classpath"])){
         if(entry=="@lwjgl2"){for(const auto &a:lwjgl2Jars())classpath<<QDir::toNativeSeparators(librariesDir+"/"+a.path);continue;}
         if(entry=="@launchwrapper"){for(const auto &a:launchwrapper())classpath<<QDir::toNativeSeparators(librariesDir+"/"+a.path);continue;}
+        if(entry.startsWith("@patch/")){const auto path=patchFile(installDir,entry);if(!QFileInfo::exists(path))fail(QString("A file of this lost version is missing: %1. Reinstall it.").arg(entry));classpath<<QDir::toNativeSeparators(path);continue;}
         const auto path=inside(installDir,entry);
         if(!QFileInfo(path).exists())fail(QString("A file of this lost version is missing: %1. Reinstall it.").arg(entry));
         classpath<<QDir::toNativeSeparators(path);

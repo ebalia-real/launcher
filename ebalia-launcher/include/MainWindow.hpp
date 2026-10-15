@@ -21,6 +21,7 @@ class QCloseEvent;
 class QPushButton;
 class QToolButton;
 class QHBoxLayout;
+class QGridLayout;
 class QVBoxLayout;
 class QNetworkAccessManager;
 class PatreonAuth;
@@ -46,6 +47,7 @@ signals:
 protected:
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
 private:
     void adaptSidebar();
     void build();
@@ -131,7 +133,7 @@ private:
     JavaRunner *m_java;
     QNetworkAccessManager *m_images=nullptr;
     // Downloaded pictures by address and width, up to about 160 MB: full-size gallery pictures are large.
-    QCache<QString,QPixmap> m_imageCache{160*1024};
+    QCache<QString,QPixmap> m_imageCache{24*1024}; // KB of decoded pictures from the network
     QList<McVersion> m_manifest;
     QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr,*m_accountList=nullptr;
     QStackedWidget *m_pages=nullptr;
@@ -146,7 +148,8 @@ private:
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
     QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;QToolButton *m_lostLog=nullptr;
-    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;QWidget *m_lostImage=nullptr;
+    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr,*m_lostAbout=nullptr;QWidget *m_lostImage=nullptr;QListWidget *m_lostShots=nullptr;QGridLayout *m_lostFacts=nullptr;
+    void openLostScreenshots(int start);
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;
     QSet<QString> m_installing,m_launchAfterInstall;

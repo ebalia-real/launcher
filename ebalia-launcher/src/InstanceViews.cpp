@@ -1,4 +1,5 @@
 #include "InstanceViews.hpp"
+#include "LogWindow.hpp"
 #include "InstanceIcons.hpp"
 #include "Language.hpp"
 #include "Ui.hpp"
@@ -146,15 +147,17 @@ void InstanceGrid::rebuild(){
 }
 InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     setObjectName("instanceDetail");auto outer=new QVBoxLayout(this);outer->setContentsMargins(0,0,0,0);
+    // The page, or its log filling all of it (full screen).
+    m_stack=new QStackedWidget;outer->addWidget(m_stack);
     // Scrolls instead of squeezing when the window is short; the artwork stays painted behind.
-    auto scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);scroll->viewport()->setAutoFillBackground(false);outer->addWidget(scroll);
+    auto scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);scroll->viewport()->setAutoFillBackground(false);m_stack->addWidget(scroll);
     auto content=new QWidget;content->setObjectName("instanceDetailContent");scroll->setWidget(content);
     auto l=new QVBoxLayout(content);l->setContentsMargins(32,18,32,24);l->setSpacing(14);
     auto backRow=new QHBoxLayout;backRow->setSpacing(6);l->addLayout(backRow);auto backButton=new QPushButton(Ui::icon("chevron-left",Ui::accent()),t("All instances"));backButton->setObjectName("backButton");backButton->setProperty("link",true);backButton->setCursor(Qt::PointingHandCursor);backRow->addWidget(backButton);backRow->addStretch();
     connect(backButton,&QPushButton::clicked,this,[this]{if(back)back();});
     auto tools=backRow; // quick tools sit at the top right, over the artwork
     auto tool=[this,tools](const QString &icon,const QString &tip,const char *name,std::function<void()> InstanceDetail::*action){auto b=toolButton(icon,tip,name);tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this,action]{if(this->*action)(this->*action)();});};
-    tool("share-2",t("Export instance"),"exportInstance",&InstanceDetail::exportZip);tool("file-text",t("Log"),"showLog",&InstanceDetail::log);
+    tool("share-2",t("Export instance"),"exportInstance",&InstanceDetail::exportZip);{auto b=toolButton("file-text",t("Log"),"showLog");tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this]{setLogFullScreen(true);});}
     auto folderButton=toolButton("folder",t("Open instance folder"),"openFolder");tools->addWidget(folderButton);connect(folderButton,&QToolButton::clicked,this,[this]{if(openFolder)openFolder({});});
     tool("image",Language::text("Cambiar fondo","Change background","Mudar fundo"),"changeBackground",&InstanceDetail::changeBackground);
     tool("settings",t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
@@ -239,7 +242,25 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
         try{ServerList::remove(m_dir+"/servers.dat",row);}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
         showServers();
     });
+    // The game's output, live, under the screenshots and servers. Full screen gives it the whole page.
+    m_logCard=new QFrame;m_logCard->setObjectName("statCard");m_logCard->setProperty("logCard",true);auto logLayout=new QVBoxLayout(m_logCard);logLayout->setContentsMargins(18,16,18,16);logLayout->setSpacing(10);l->addWidget(m_logCard);
+    m_log=new LogView;m_log->setMinimumHeight(300);m_log->running=[this]{return m_running;};logLayout->addWidget(m_log);
+    auto logBadge=new QLabel;logBadge->setObjectName("statIcon");logBadge->setFixedSize(32,32);logBadge->setAlignment(Qt::AlignCenter);logBadge->setPixmap(Ui::pixmap("file-text",18,Ui::accent()));m_log->bar()->insertWidget(0,logBadge);
+    auto logTitle=new QLabel(t("Log"));logTitle->setObjectName("statTitle");m_log->bar()->insertWidget(1,logTitle);m_log->bar()->insertSpacing(2,4);
+    m_logExpand=toolButton("maximize-2",t("Full screen"),"logFullScreen");m_log->bar()->addWidget(m_logExpand);
+    connect(m_logExpand,&QToolButton::clicked,this,[this]{setLogFullScreen(m_stack->currentIndex()==0);});
+    m_logPage=new QWidget;m_logPage->setObjectName("logPage");auto page=new QVBoxLayout(m_logPage);page->setContentsMargins(32,18,32,24);page->setSpacing(14);m_stack->addWidget(m_logPage);
+    m_logBack=new QPushButton(Ui::icon("chevron-left",Ui::accent()),{});m_logBack->setObjectName("logBack");m_logBack->setProperty("link",true);m_logBack->setCursor(Qt::PointingHandCursor);
+    auto pageHead=new QHBoxLayout;pageHead->addWidget(m_logBack);pageHead->addStretch();page->addLayout(pageHead);
+    connect(m_logBack,&QPushButton::clicked,this,[this]{setLogFullScreen(false);});
+    auto escape=new QShortcut(QKeySequence(Qt::Key_Escape),m_logPage,nullptr,nullptr,Qt::WidgetWithChildrenShortcut);connect(escape,&QShortcut::activated,this,[this]{setLogFullScreen(false);});
     l->addStretch();arrange();
+}
+void InstanceDetail::setLogFullScreen(bool full){
+    if(full==(m_stack->currentIndex()==1))return;
+    static_cast<QBoxLayout*>((full?m_logPage:m_logCard)->layout())->addWidget(m_log,1); // the same view moves, with what it has read and its filter
+    m_logExpand->setIcon(Ui::icon(full?"minimize-2":"maximize-2"));m_logExpand->setToolTip(t(full?"Exit full screen":"Full screen"));m_logExpand->setAccessibleName(m_logExpand->toolTip());
+    m_stack->setCurrentIndex(full?1:0);m_log->show();if(full)m_log->setFocus();
 }
 void InstanceDetail::showScreenshots(){
     auto files=QDir(m_dir+"/screenshots").entryInfoList({"*.png","*.jpg","*.jpeg"},QDir::Files,QDir::Time);
@@ -276,15 +297,21 @@ void InstanceDetail::arrange(){
     for(int n=0;n<m_cards.size();++n){m_cardGrid->addWidget(m_cards[n],n/columns,n%columns);m_cards[n]->setFixedHeight(compact?112:150);m_cardIcons[n]->setVisible(!compact);}
     for(const auto &action:m_actions)action.first->setText(compact?QString():" "+action.second);
 }
-void InstanceDetail::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);arrange();}
+void InstanceDetail::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);arrange();loadBackdrop();}
+// The artwork only fills the top of the page: it is decoded for that strip, not at full size.
+void InstanceDetail::loadBackdrop(){
+    if(m_artFile.isEmpty()||width()<=1)return;const auto bounds=Ui::artBounds(QSizeF(width(),qMin(height(),340))*devicePixelRatioF());
+    if(!m_backdropBounds.isEmpty()&&m_backdropBounds.width()>=bounds.width())return;m_backdropBounds=bounds;
+    Ui::loadArt(m_artFile,bounds,this,[this,dir=m_dir,bounds](const QPixmap &p){if(m_dir==dir&&m_backdropBounds==bounds){m_backdrop=p;m_scaled={};update();}});
+}
 void InstanceDetail::paintEvent(QPaintEvent *){
     if(m_backdrop.isNull())return;
     QPainter p(this);const int height=qMin(this->height(),340);const QSize area(width(),height);
-    if(m_scaled.size()!=area)m_scaled=Ui::cover(m_backdrop,area);p.drawPixmap(0,0,m_scaled);
+    const qreal ratio=devicePixelRatioF();if(m_scaled.deviceIndependentSize().toSize()!=area){m_scaled=Ui::cover(m_backdrop,(QSizeF(area)*ratio).toSize());m_scaled.setDevicePixelRatio(ratio);}p.drawPixmap(0,0,m_scaled);
     QLinearGradient fade(0,0,0,height);fade.setColorAt(0,QColor(20,20,22,120));fade.setColorAt(0.55,QColor(20,20,22,200));fade.setColorAt(1,QColor(20,20,22,255));p.fillRect(QRect(QPoint(0,0),area),fade);
 }
 void InstanceDetail::showInstance(const InstanceInfo &i){
-    if(const auto art=InstanceIcons::background(i.base.dir);m_dir!=i.base.dir||m_art!=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch())){const auto dir=i.base.dir;m_dir=dir;m_art=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch());m_backdrop={};m_scaled={};Ui::loadArt(art,{1920,1080},this,[this,dir](const QPixmap &p){if(m_dir==dir){m_backdrop=p;m_scaled={};update();}});}
+    if(const auto art=InstanceIcons::background(i.base.dir);m_dir!=i.base.dir||m_art!=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch())){m_dir=i.base.dir;m_art=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch());m_artFile=art;m_backdrop={};m_scaled={};m_backdropBounds={};loadBackdrop();}
     m_dir=i.base.dir;m_icon->setIcon(InstanceIcons::icon(i.icon,i.base.dir));m_name->setText(i.base.name);
     auto chips=static_cast<QBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
     auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setWordWrap(true);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
@@ -299,4 +326,6 @@ void InstanceDetail::showInstance(const InstanceInfo &i){
     const int packs=int(InstanceContent::list(dir,"resourcepacks").size()),shaders=int(InstanceContent::list(dir,"shaderpacks").size()),worlds=int(InstanceContent::list(dir,"saves").size());
     m_counts[1]->setText(packs?t("%1 resource packs").arg(packs):t("No resource packs yet"));m_counts[2]->setText(shaders?t("%1 shader packs").arg(shaders):t("No shader packs yet"));m_counts[3]->setText(worlds?t("%1 worlds").arg(worlds):t("No worlds yet"));
     m_running=i.running;showScreenshots();showServers();
+    if(m_log->folder()!=dir){m_log->setFolder(dir);setLogFullScreen(false);}
+    m_logBack->setText(" "+i.base.name);
 }

@@ -1,3 +1,23 @@
+# 1.2.0
+
+- Uses about half the memory: pictures load at the size they are shown instead of full size (the home backgrounds
+  are no longer all read ahead, news pictures and lost version cards are small, mod icons in the Mods window are kept
+  at 64 pixels), the caches of pictures are smaller, and minimizing the launcher (as when you play) lets go of the
+  pictures kept for later. On Linux, freed memory goes back to the system.
+- Lost versions install only their game. Some archive packages were saved together with the launcher that ran them
+  (UltimMC, BetaCraft) and other versions; EBALIA starts the game itself, so those are no longer installed: NSSS takes
+  4 MB instead of 700, Alpha 1.0.16 and Minecraft a1.1.1 drop UltimMC and BetaCraft. Versions installed before are
+  tidied the next time they start, keeping their worlds, options and log.
+- Lost versions show their own screenshots, taken in each version: the large picture, a strip to choose another and a
+  full size viewer. Each one tells what it is (a longer description in every language), what the game shows as its
+  version, whether it is a remake or was rescued by EBALIA, who made it, its size installed and to download, and what
+  it runs with. The cards of the list show the same screenshots.
+- Fixed: Minecraft 1.Li02 closed with an error when creating a world (its Create New World screen never set up the
+  player). EBALIA now starts it with that screen fixed, without changing the game's files; Survival and Hardcore
+  worlds work.
+- The live log is part of the instance page, under the screenshots and servers, and follows the game while it runs.
+  Full screen gives it the whole page (the log button at the top opens it that way); Escape or the back link return.
+
 # 1.1.9
 
 - Faster: reading mod icons, pack pictures and descriptions, finding packs on Modrinth and skin heads run on a few

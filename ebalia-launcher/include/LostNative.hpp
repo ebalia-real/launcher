@@ -10,7 +10,9 @@
 //   workingDir folder the game runs in, relative to the installed package
 //   classpath  package files relative to the package root; "@lwjgl2" stands for Mojang's
 //              official LWJGL 2 and JInput jars for the running system, "@launchwrapper" for
-//              Mojang's launchwrapper 1.5 (with jopt-simple and ASM)
+//              Mojang's launchwrapper 1.5 (with jopt-simple and ASM), "@patch/<file>" for a jar of fixed classes
+//              that EBALIA ships (resources/lost/patches, see scripts/lost-patches): first on the class path, its
+//              classes replace the game's own without changing the installed files
 //   mainClass, jvmArgs, gameArgs
 //   natives    "lwjgl2": Mojang's natives for the running system are extracted for the game
 //   stdin      lines written to the game's standard input (MultiMC's NewLaunch reads its script there)
@@ -19,6 +21,10 @@
 namespace LostNative {
 struct Command {QString workingDir;QStringList arguments;QMap<QString,QString> environment;QByteArray input;};
 bool available(const QJsonObject &spec);
+// What of the package the game uses (paths inside it): its game folder, the jars on its class path and any "keep"
+// entries. Empty when the game folder is the package itself, so all of it is needed. Packages saved from another
+// launcher (UltimMC, BetaCraft) also hold that launcher and other versions, which EBALIA neither runs nor installs.
+QStringList needed(const QJsonObject &spec);
 // "windows", "osx" or "linux": the Mojang classifier of this system.
 QString system();
 // Downloads (checked with SHA-1) the shared libraries the description needs into librariesDir

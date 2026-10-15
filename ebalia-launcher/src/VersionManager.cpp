@@ -47,6 +47,8 @@ void VersionManager::loadVersions()
         v.launcher    = obj["launcher"].toString();
         v.requiredTier = obj["required_tier"].toString(QStringLiteral("free"));
         v.native      = obj["native"].toObject();
+        v.about=obj["about"].toString();v.game=obj["game"].toString();v.origin=obj["origin"].toString();v.credit=obj["credit"].toString();
+        v.installedSize=obj["installed_size"].toInteger();v.screenshots=obj["screenshots"].toInt();
         v.installed   = isVersionInstalled(v);
         m_versions.append(v);
     }

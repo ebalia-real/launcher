@@ -19,6 +19,8 @@
 #include "PackService.hpp"
 #include "ServerList.hpp"
 #include "LostNative.hpp"
+#include "LostInstaller.hpp"
+#include "VersionManager.hpp"
 #include "SoftwareGl.hpp"
 #include "ModCompat.hpp"
 #include "CrashReport.hpp"
@@ -167,6 +169,58 @@ private slots:
         auto escape=spec;escape["classpath"]=QJsonArray{"../other.jar"};QVERIFY_EXCEPTION_THROWN(LostNative::command(escape,install,root.filePath("libraries"),"Arq"),std::runtime_error);
         auto missing=spec;missing["classpath"]=QJsonArray{"bin/none.jar"};QVERIFY_EXCEPTION_THROWN(LostNative::command(missing,install,root.filePath("libraries"),"Arq"),std::runtime_error);
         QCOMPARE(LostNative::command(spec,install,root.filePath("libraries"),"  ").arguments.contains("Player"),true);
+    }
+    void lostVersionClassPatches(){
+        // Minecraft 1.Li02's fixed Create New World screen goes before the game on the class path; the game is not changed.
+        QTemporaryDir root;const auto install=root.filePath("versions/li02");QDir().mkpath(install+"/bin");
+        {QFile jar(install+"/bin/minecraft.jar");QVERIFY(jar.open(QIODevice::WriteOnly));jar.write("game");}
+        const QJsonObject spec{{"workingDir",""},{"mainClass","net.minecraft.client.Minecraft"},{"classpath",QJsonArray{"@patch/minecraft_1_li02.jar","bin/minecraft.jar"}}};
+        QVERIFY_EXCEPTION_THROWN(LostNative::command(spec,install,root.filePath("libraries"),"Arq"),std::runtime_error); // not prepared yet
+        LostNative::prepare(spec,install,root.filePath("libraries"));
+        const auto patch=install+"/.ebalia/patches/minecraft_1_li02.jar";QVERIFY(QFile::exists(patch));
+        QVERIFY(!Archive::readEntry(patch,"vt.class",1<<20).isEmpty());
+        const auto cmd=LostNative::command(spec,install,root.filePath("libraries"),"Arq");
+        const auto cp=cmd.arguments[cmd.arguments.indexOf("-cp")+1].split(QDir::listSeparator());
+        QCOMPARE(cp.size(),2);QCOMPARE(QFileInfo(cp[0]).fileName(),QString("minecraft_1_li02.jar"));QVERIFY(cp[1].endsWith("minecraft.jar"));
+        {QFile jar(install+"/bin/minecraft.jar");QVERIFY(jar.open(QIODevice::ReadOnly));QCOMPARE(jar.readAll(),QByteArray("game"));}
+        LostNative::prepare(spec,install,root.filePath("libraries")); // again: nothing to do
+        for(const auto *bad:{"@patch/../x.jar","@patch/","@patch/x.zip","@patch/missing.jar"}){
+            auto broken=spec;broken["classpath"]=QJsonArray{QString(bad)};QVERIFY_EXCEPTION_THROWN(LostNative::prepare(broken,install,root.filePath("libraries")),std::runtime_error);
+        }
+        // The catalogue uses it for that version only.
+        VersionManager versions;versions.loadVersions();bool found=false;
+        for(const auto &v:versions.getVersions())if(v.id=="minecraft_1_li02"){found=true;QCOMPARE(v.native["classpath"].toArray().first().toString(),QString("@patch/minecraft_1_li02.jar"));}
+        QVERIFY(found);
+    }
+    void lostVersionInstallsOnlyTheGame(){
+        // A package saved from UltimMC, with BetaCraft beside it: only the game's folder and jars are installed.
+        QTemporaryDir root;const auto package=root.filePath("package");
+        auto put=[&](const QString &path){QDir().mkpath(QFileInfo(package+"/"+path).absolutePath());QFile f(package+"/"+path);QVERIFY(f.open(QIODevice::WriteOnly));f.write(path.toUtf8());};
+        for(const auto *path:{"UltimMC/UltimMC.exe","UltimMC/Qt5Core.dll","UltimMC/Game.bat","UltimMC/jars/NewLaunch.jar","UltimMC/instances/Game/.minecraft/saves/World/level.dat",
+                              "UltimMC/instances/Game/libraries/custom.jar","UltimMC/instances/Other/.minecraft/options.txt",".betacraft/launcher/betacraft.jar"})put(path);
+        QDir().mkpath(root.filePath("cache/lost"));const auto zip=root.filePath("cache/lost/pack.zip");Archive::compress(package,zip);
+        QFile archive(zip);QVERIFY(archive.open(QIODevice::ReadOnly));
+        VersionInfo v;v.id="game";v.downloadUrl="https://example.invalid/pack.zip";v.launchCommand="Game.bat";v.archiveSize=archive.size();
+        v.archiveSha256=QCryptographicHash::hash(archive.readAll(),QCryptographicHash::Sha256).toHex();archive.close();
+        v.native=QJsonObject{{"workingDir","UltimMC/instances/Game/.minecraft"},{"mainClass","org.multimc.EntryPoint"},
+                             {"classpath",QJsonArray{"UltimMC/jars/NewLaunch.jar","@lwjgl2","UltimMC/instances/Game/libraries/custom.jar"}}};
+        QCOMPARE(LostNative::needed(v.native),QStringList({"UltimMC/instances/Game/.minecraft","UltimMC/jars/NewLaunch.jar","UltimMC/instances/Game/libraries/custom.jar"}));
+        const auto dest=root.filePath("versions/game");LostInstaller::install(v,dest);
+        QVERIFY(QFile::exists(dest+"/UltimMC/instances/Game/.minecraft/saves/World/level.dat"));QVERIFY(QFile::exists(dest+"/UltimMC/jars/NewLaunch.jar"));
+        QVERIFY(QFile::exists(dest+"/UltimMC/instances/Game/libraries/custom.jar"));
+        for(const auto *gone:{"UltimMC/UltimMC.exe","UltimMC/Qt5Core.dll","UltimMC/Game.bat","UltimMC/instances/Other",".betacraft"})QVERIFY2(!QFileInfo::exists(dest+"/"+gone),gone);
+        QCOMPARE(ModRepository::read(dest+"/.installed.json")["files"].toArray().size(),3);
+        QVERIFY(LostNative::command(v.native,dest,root.filePath("libraries"),"Arq").arguments.contains("org.multimc.EntryPoint"));
+        // An installation made by an earlier launcher holds everything: the next start keeps the game, its home and its log.
+        const auto old=root.filePath("versions/old");Archive::extract(zip,old);ModRepository::write(old+"/.installed.json",{{"id","game"},{"launchFile","UltimMC/Game.bat"}});
+        QDir().mkpath(old+"/.ebalia/home");{QFile f(old+"/.ebalia/home/options.txt");QVERIFY(f.open(QIODevice::WriteOnly));}{QFile f(old+"/launcher.log");QVERIFY(f.open(QIODevice::WriteOnly));}
+        LostInstaller::tidy(v,old);
+        QVERIFY(QFile::exists(old+"/UltimMC/instances/Game/.minecraft/saves/World/level.dat"));QVERIFY(QFile::exists(old+"/.ebalia/home/options.txt"));QVERIFY(QFile::exists(old+"/launcher.log"));
+        QVERIFY(!QFileInfo::exists(old+"/UltimMC/UltimMC.exe"));QVERIFY(!QFileInfo::exists(old+"/.betacraft"));QVERIFY(!QFileInfo::exists(old+"/UltimMC/instances/Other"));
+        QVERIFY(ModRepository::read(old+"/.installed.json").contains("files"));
+        // A package whose game folder is the package itself keeps everything.
+        QVERIFY(LostNative::needed(QJsonObject{{"workingDir",""},{"mainClass","Start"},{"classpath",QJsonArray{"bin/minecraft.jar"}}}).isEmpty());
+        QVERIFY_EXCEPTION_THROWN(LostNative::needed(QJsonObject{{"workingDir","../x"},{"mainClass","Start"}}),std::runtime_error);
     }
     void serverListKeepsUnknownFields(){
         QTemporaryDir dir;const auto file=dir.filePath("servers.dat");

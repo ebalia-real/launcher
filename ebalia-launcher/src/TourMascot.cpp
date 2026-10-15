@@ -19,8 +19,9 @@ const QPointF gaze[]{{0,0},{0,0},{0,-0.5},{0,0},{0,0},{0,0},{1,-1}};
 }
 TourMascot::TourMascot(QWidget *parent):QWidget(parent) {
  // Enlarge the pixel art without blurring; later smooth scaling stays crisp.
- const QImage sheet(QStringLiteral(":/mascot/silence-sheet.png"));
- m_sheet=QPixmap::fromImage(sheet.scaled(sheet.size()*upscale,Qt::IgnoreAspectRatio,Qt::FastTransformation));
+ // One enlarged sheet for every Silence on screen (the guide page and the tour); it lives as long as the launcher.
+ static const QPixmap *shared=[]{const QImage sheet(QStringLiteral(":/mascot/silence-sheet.png"));return new QPixmap(QPixmap::fromImage(sheet.scaled(sheet.size()*upscale,Qt::IgnoreAspectRatio,Qt::FastTransformation)));}();
+ m_sheet=*shared;
  setObjectName("tourMascot");setMinimumSize(78,112);setCursor(Qt::PointingHandCursor);
  setAccessibleName("Silence");
  m_frame.setInterval(16);connect(&m_frame,&QTimer::timeout,this,qOverload<>(&QWidget::update));

@@ -6,6 +6,9 @@
 #include "Language.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
+#if defined(__GLIBC__) || defined(Q_OS_WIN)
+#include <malloc.h>
+#endif
 namespace {
 int windowsOpen=0;
 // Files on disk (an instance background) can be replaced under the same name: their time is part of the key.
@@ -13,13 +16,27 @@ QString artKey(const QString &path,QSize bounds){auto key=path+QString(":%1x%2")
 struct ArtRequest {QPointer<QObject> receiver;std::function<void(const QPixmap &)> ready;};
 class ArtCache:public QObject {
 public:
-    ArtCache():QObject(qApp),small(24*1024),large(64*1024){pool.setMaxThreadCount(2);pool.setExpiryTimeout(10000);}
-    QCache<QString,QPixmap> small,large;
+    ArtCache():QObject(qApp),small(10*1024),large(20*1024){pool.setMaxThreadCount(2);pool.setExpiryTimeout(10000);}
+    QCache<QString,QPixmap> small,large,made{2*1024}; // made: Ui::art results
     QHash<QString,QList<ArtRequest>> pending;
     QThreadPool pool;
     QCache<QString,QPixmap> &cache(QSize bounds){return bounds.width()<=768?small:large;}
 };
 ArtCache &artCache(){static QPointer<ArtCache> cache;if(!cache)cache=new ArtCache;return *cache;}
+}
+QSize Ui::artBounds(QSizeF pixels){
+    for(const QSize bounds:{QSize(480,270),QSize(960,540),QSize(1280,720),QSize(1600,900),QSize(1920,1080)})
+        if(bounds.width()>=pixels.width()&&bounds.height()>=pixels.height())return bounds;
+    return {2560,1440};
+}
+void Ui::releaseMemory(){
+    // The small pictures stay: lists such as the lost versions paint straight from them and would flash empty.
+    auto &cache=artCache();cache.large.clear();cache.made.clear();
+#if defined(__GLIBC__)
+    malloc_trim(0);
+#elif defined(Q_OS_WIN)
+    _heapmin();
+#endif
 }
 QPixmap Ui::cachedArt(const QString &resource,QSize bounds){auto p=artCache().cache(bounds).object(artKey(resource,bounds));return p?*p:QPixmap();}
 QThreadPool *Ui::backgroundPool(){
@@ -60,6 +77,8 @@ QIcon Ui::navigationIcon(const QString &name){
     return result;
 }
 QString Ui::lostArtFor(const QString &id,const QString &category){
+    // Its own screenshot when one is bundled; artwork of the same mood otherwise.
+    if(const auto shot=":/lost/"+id+"/1.jpg";QFile::exists(shot))return shot;
     static const QHash<QString,QString> covers{
         {"a1.2.6_06","mineshaft"},{"alpha_1.2.7","adventure"},{"alpha_1.2.6_04","village"},
         {"alpha_herobrine_test","mangroves"},{"minecraft_a1.1.1","bees"},{"alpha_1.0.16.05_20","island"},{"alpha_1.3","ocean"},
@@ -85,7 +104,15 @@ QPixmap Ui::cover(const QPixmap &source,QSize size,int radius){
     p.drawPixmap(0,0,scaled,(scaled.width()-size.width())/2,0,size.width(),size.height()); // keep the sky, drop the HUD at the bottom of some screenshots
     return out;
 }
-QPixmap Ui::art(const QString &resource,QSize size,int radius){return cover(QPixmap(resource),size,radius);}
+QPixmap Ui::art(const QString &resource,QSize size,int radius){
+    // Decoded straight at the size it is shown: a full picture loaded through QPixmap would also stay in Qt's pixmap cache.
+    auto &made=artCache().made;const auto key=artKey(resource,size)+":"+QString::number(radius);
+    if(auto known=made.object(key))return *known;
+    QImageReader reader(resource);reader.setAutoTransform(true);const auto original=reader.size();
+    if(!original.isEmpty())reader.setScaledSize(original.scaled(size,Qt::KeepAspectRatioByExpanding).boundedTo(original));
+    const auto result=cover(QPixmap::fromImage(reader.read()),size,radius);made.insert(key,new QPixmap(result),qMax(1,int(qint64(size.width())*size.height()*4/1024)));
+    return result;
+}
 QPixmap Ui::avatar(const QString &name,int size){
     QPixmap out(size,size);out.fill(Qt::transparent);QPainter p(&out);p.setRenderHint(QPainter::Antialiasing);p.setPen(Qt::NoPen);
     static const QList<QColor> colors{QColor(60,133,39),QColor(45,99,214),QColor(181,98,36),QColor(132,63,178),QColor(32,140,140),QColor(176,52,74)};
@@ -203,7 +230,7 @@ QPushButton[patreon=true]{background:#ed6957;border:1px solid #f58978;color:#fff
 #statCard{background:rgba(30,30,34,235);border:1px solid #34343a;border-radius:14px;}#statCard:hover{border-color:#4a9e31;}#statCard QLabel{background:transparent;}#statTitle{font-size:16px;font-weight:800;}#statIcon{background:rgba(60,133,39,60);border-radius:10px;}
 #groupHeader{background:transparent;border:0;text-align:left;font-size:15px;font-weight:800;padding:6px 2px;}#groupHeader:hover{color:#97ec85;background:transparent;}
 #lostList{padding:8px;}#lostList::item{padding:0;margin:4px 2px;border-radius:12px;border:2px solid transparent;}#lostList::item:selected{background:transparent;border:2px solid #4a9e31;}#lostList::item:hover{background:transparent;border:2px solid #3a3a41;}
-#lostDetail{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#lostDetail QLabel{background:transparent;}#skinPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#statusBar{background:#18181b;border-top:1px solid #26262a;}#statusText{color:#a4a4ad;}
+#lostDetail{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#lostDetail QLabel{background:transparent;}#lostAbout{color:#e6e6ea;font-size:14px;}#lostFactKey{color:#8f8f98;font-size:12px;font-weight:700;}#lostFactValue{color:#d6d6dc;font-size:13px;}QListWidget#lostShots{background:transparent;border:0;}QListWidget#lostShots::item{border:2px solid transparent;border-radius:10px;padding:0;}QListWidget#lostShots::item:selected{border-color:#6fd15b;background:transparent;}QListWidget#lostShots::item:hover{border-color:#4a4a52;}#skinPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#statusBar{background:#18181b;border-top:1px solid #26262a;}#statusText{color:#a4a4ad;}
 #instanceSources::item{padding:6px 8px;}
 )");}
 QList<Ui::Theme> Ui::themes(){

@@ -5,6 +5,7 @@
 #include <QPixmap>
 #include <functional>
 #include "McInstanceManager.hpp"
+class LogView;class QFrame;class QStackedWidget;
 class QVBoxLayout;class QLineEdit;class QLabel;class QPushButton;class QGridLayout;class QScrollArea;class QToolButton;class QListWidget;
 struct InstanceInfo {
     McInstance base;
@@ -33,7 +34,9 @@ public:
     explicit InstanceDetail(QWidget *parent=nullptr);
     void showInstance(const InstanceInfo &instance);
     QString dir() const {return m_dir;}
-    std::function<void()> back,play,settings,log,exportZip,copy,remove,mods,findMods,savePack,changeGroup,changeBackground;
+    std::function<void()> back,play,settings,exportZip,copy,remove,mods,findMods,savePack,changeGroup,changeBackground;
+    // The log takes the whole page, or goes back under the screenshots and servers.
+    void setLogFullScreen(bool full);
     std::function<void(const QString &folder)> openFolder;
     // The window of resourcepacks, shaderpacks or saves, like the mods one.
     std::function<void(const QString &folder)> manage;
@@ -44,11 +47,13 @@ protected:
 private:
     void arrange();
     QGridLayout *m_cardGrid;QList<QWidget*> m_cards,m_cardIcons;QList<QPair<QPushButton*,QString>> m_actions;bool m_compact=false;int m_cardColumns=0;
-    QPixmap m_backdrop,m_scaled;QString m_dir,m_art;QToolButton *m_icon;QLabel *m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
+    void loadBackdrop();
+    QPixmap m_backdrop,m_scaled;QSize m_backdropBounds;QString m_dir,m_art,m_artFile;QToolButton *m_icon;QLabel *m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
     QList<QLabel*> m_counts;
     // Screenshots gallery and multiplayer servers, below the actions.
     void showScreenshots();
     void showServers();
+    LogView *m_log;QFrame *m_logCard;QWidget *m_logPage;QStackedWidget *m_stack;QToolButton *m_logExpand;QPushButton *m_logBack;
     QListWidget *m_gallery,*m_servers;QLabel *m_galleryEmpty,*m_serversEmpty,*m_galleryCount;QPushButton *m_addServer,*m_editServer,*m_removeServer,*m_copyServer;bool m_running=false;QString m_gallerySignature;
 };
 namespace InstanceText {QString lastPlayed(qint64 seconds);QString loader(const QString &loader);}

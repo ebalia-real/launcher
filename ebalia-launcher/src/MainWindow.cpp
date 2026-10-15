@@ -75,8 +75,10 @@ private:
 class Cover:public QWidget {
 public:
     explicit Cover(int radius,bool allCorners=false,QWidget *parent=nullptr):QWidget(parent),m_radius(radius),m_all(allCorners){setAttribute(Qt::WA_TransparentForMouseEvents);}
+    // A cover that opens something when clicked (the screenshots of a lost version, full size).
+    void setClicked(std::function<void()> clicked){m_clicked=std::move(clicked);setAttribute(Qt::WA_TransparentForMouseEvents,!m_clicked);setCursor(m_clicked?Qt::PointingHandCursor:Qt::ArrowCursor);}
     void setPixmap(const QPixmap &pixmap){m_resource.clear();assign(pixmap);}
-    void setArtwork(const QString &path){if(m_resource==path)return;m_resource=path;assign({});Ui::loadArt(path,{1920,1080},this,[this,path](const QPixmap &p){if(m_resource==path)assign(p);});}
+    void setArtwork(const QString &path){if(m_resource==path)return;m_resource=path;m_bounds={};assign({});request();}
     void setShaded(bool shaded){m_shaded=shaded;update();}
     void setAspectRatio(qreal ratio){m_ratio=ratio;auto policy=QSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);policy.setHeightForWidth(true);setSizePolicy(policy);updateGeometry();}
     QSize sizeHint() const override {return m_ratio>0?QSize(300,heightForWidth(300)):QWidget::sizeHint();}
@@ -91,9 +93,18 @@ protected:
         if(!m_scaled.isNull()){const auto logical=m_scaled.deviceIndependentSize();p.drawPixmap(QPointF((width()-logical.width())/2,(height()-logical.height())/2),m_scaled);}
         if(m_shaded){QLinearGradient shade(0,height()*0.25,0,height());shade.setColorAt(0,Qt::transparent);shade.setColorAt(1,QColor(18,18,24,240));p.fillRect(rect(),shade);}
     }
+    void resizeEvent(QResizeEvent *event) override {QWidget::resizeEvent(event);request();}
+    void mousePressEvent(QMouseEvent *event) override {event->accept();}
+    void mouseReleaseEvent(QMouseEvent *event) override {if(m_clicked&&event->button()==Qt::LeftButton&&rect().contains(event->position().toPoint()))m_clicked();}
 private:
+    std::function<void()> m_clicked;
+    // Artwork is decoded for the size the cover has, again when it grows into larger bounds.
+    void request(){
+        if(m_resource.isEmpty()||width()<=1)return;const auto bounds=Ui::artBounds(QSizeF(size())*devicePixelRatioF());if(bounds==m_bounds)return;
+        m_bounds=bounds;Ui::loadArt(m_resource,bounds,this,[this,path=m_resource,bounds](const QPixmap &p){if(m_resource==path&&m_bounds==bounds){m_pixmap=p;m_scaled={};m_targetSize={};update();}});
+    }
     void assign(const QPixmap &pixmap){m_pixmap=pixmap;m_scaled={};m_targetSize={};update();}
-    QPixmap m_pixmap,m_scaled;QSize m_targetSize;QString m_resource;int m_radius;bool m_all,m_shaded=false;qreal m_ratio=0;
+    QPixmap m_pixmap,m_scaled;QSize m_targetSize,m_bounds;QString m_resource;int m_radius;bool m_all,m_shaded=false;qreal m_ratio=0;
 };
 // QPushButton's default size hint ignores its child layout.
 class ContentButton:public QPushButton {
@@ -167,12 +178,12 @@ public:
     void paint(QPainter *p,const QStyleOptionViewItem &option,const QModelIndex &index)const override{
         const auto data=index.data(Qt::UserRole+1).toJsonObject();const auto r=option.rect.adjusted(3,3,-3,-3);p->save();p->setRenderHint(QPainter::Antialiasing);
         QPainterPath clip;clip.addRoundedRect(r,10,10);p->setClipPath(clip);
-        const auto path=data["art"].toString();auto thumbnail=Ui::cachedArt(path,{768,432});
+        const auto path=data["art"].toString();const auto bounds=Ui::artBounds(QSizeF(r.size())*(option.widget?option.widget->devicePixelRatioF():1.0));auto thumbnail=Ui::cachedArt(path,bounds);
         if(thumbnail.isNull()&&!m_pending.contains(path)){
             m_pending.insert(path);auto self=const_cast<ArchiveDelegate*>(this);QPointer<QWidget> view=const_cast<QWidget*>(option.widget);
-            Ui::loadArt(path,{768,432},self,[self,path,view](const QPixmap &){self->m_pending.remove(path);if(view)view->update();if(auto list=qobject_cast<QAbstractItemView*>(view.data()))list->viewport()->update();});
+            Ui::loadArt(path,bounds,self,[self,path,view](const QPixmap &){self->m_pending.remove(path);if(view)view->update();if(auto list=qobject_cast<QAbstractItemView*>(view.data()))list->viewport()->update();});
         }
-        p->fillRect(r,QColor(27,31,36));if(!thumbnail.isNull()){const qreal cropHeight=thumbnail.width()*qreal(r.height())/r.width();p->setRenderHint(QPainter::SmoothPixmapTransform);p->drawPixmap(r,thumbnail,QRectF(0,0,thumbnail.width(),qMin(cropHeight,qreal(thumbnail.height()))));}
+        p->fillRect(r,QColor(27,31,36));if(!thumbnail.isNull()){const qreal cropHeight=thumbnail.width()*qreal(r.height())/r.width();p->setRenderHint(QPainter::SmoothPixmapTransform);const qreal height=qMin(cropHeight,qreal(thumbnail.height()));p->drawPixmap(r,thumbnail,QRectF(0,(thumbnail.height()-height)*0.4,thumbnail.width(),height));}
         QLinearGradient shade(r.topLeft(),r.topRight());shade.setColorAt(0,QColor(10,10,16,220));shade.setColorAt(1,QColor(10,10,16,65));p->fillRect(r,shade);
         const auto category=data["category"].toString();p->drawPixmap(r.left()+14,r.center().y()-16,InstanceIcons::icon(category=="horror"?"horror":category=="release"?"crafting":"grass").pixmap(32,32));
         auto font=option.font;font.setPixelSize(14);font.setBold(true);p->setFont(font);p->setPen(Qt::white);const int width=r.width()-72;
@@ -465,7 +476,7 @@ QWidget *MainWindow::buildInstances() {
     m_grid->newGroup=[this]{bool ok;auto name=QInputDialog::getText(this,Language::key("New group"),Language::key("Group name"),QLineEdit::Normal,{},&ok).trimmed();if(!ok||name.isEmpty())return;auto groups=QSettings().value("ui/groups").toStringList();if(!groups.contains(name))groups<<name;QSettings().setValue("ui/groups",groups);refreshInstances();};
     m_grid->groupMenu=[this](const QString &group){groupMenu(group);};
     m_detail->back=[this]{m_library->setCurrentWidget(m_grid);refreshInstances();};
-    m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{const auto i=selected();showLog(i.dir,i.name,[this,dir=i.dir]{return m_mc->isRunning(dir);});};
+    m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};
     m_detail->changeIcon=[this](const QString &key,const QImage &custom){setInstanceIcon(m_detail->dir(),key,custom);refreshInstances();};
     m_detail->changeBackground=[this]{changeBackground(m_detail->dir());};
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
@@ -580,8 +591,19 @@ QWidget *MainWindow::buildLost() {
     auto panels=new ArchivePanels(m_lost,detail);panels->setObjectName("archivePanels");l->addWidget(panels,1);
     auto cover=new Cover(13);cover->setObjectName("lostCover");cover->setShaded(true);cover->setMinimumHeight(180);cover->setMaximumHeight(420);cover->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);m_lostImage=cover;dl->addWidget(cover,3);
     auto overlay=new QVBoxLayout(cover);overlay->setContentsMargins(20,20,20,20);overlay->addStretch();label("EBALIA  /  "+k("Lost versions").toUpper(),overlay,"archiveEyebrow");m_lostTitle=label({},overlay,"detailTitle");m_lostTitle->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+    cover->setClicked([this]{openLostScreenshots(m_lostShots->currentRow());});cover->setToolTip(Language::key("See the screenshots full size"));
+    // Screenshots taken in this version: one shows above, all of them full size with a click.
+    m_lostShots=new QListWidget;m_lostShots->setObjectName("lostShots");m_lostShots->setViewMode(QListView::IconMode);m_lostShots->setFlow(QListView::LeftToRight);m_lostShots->setWrapping(false);
+    m_lostShots->setIconSize(QSize(112,63));m_lostShots->setSpacing(3);m_lostShots->setMovement(QListView::Static);m_lostShots->setFixedHeight(86);m_lostShots->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    m_lostShots->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_lostShots->setFrameShape(QFrame::NoFrame);m_lostShots->setCursor(Qt::PointingHandCursor);m_lostShots->setContentsMargins(0,0,0,0);
+    {auto strip=new QHBoxLayout;strip->setContentsMargins(14,10,14,0);strip->addWidget(m_lostShots);dl->addLayout(strip);}
+    connect(m_lostShots,&QListWidget::currentRowChanged,this,[this](int row){if(auto item=m_lostShots->item(row))static_cast<Cover*>(m_lostImage)->setArtwork(item->data(Qt::UserRole).toString());});
+    connect(m_lostShots,&QListWidget::itemActivated,this,[this](QListWidgetItem *item){openLostScreenshots(m_lostShots->row(item));});
     auto description=new QScrollArea;description->setWidgetResizable(true);description->setFrameShape(QFrame::NoFrame);description->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);description->setMinimumHeight(75);dl->addWidget(description,2);
-    auto textBody=new QWidget;description->setWidget(textBody);auto body=new QVBoxLayout(textBody);body->setContentsMargins(20,18,20,18);body->setSpacing(10);
+    auto textBody=new QWidget;description->setWidget(textBody);auto body=new QVBoxLayout(textBody);body->setContentsMargins(20,14,20,14);body->setSpacing(12);
+    m_lostAbout=label({},body,"lostAbout");
+    // What it is, at a glance: the version the game shows, where it comes from, its size and what it needs.
+    auto facts=new QWidget;m_lostFacts=new QGridLayout(facts);m_lostFacts->setContentsMargins(0,0,0,0);m_lostFacts->setHorizontalSpacing(16);m_lostFacts->setVerticalSpacing(6);m_lostFacts->setColumnStretch(1,1);body->addWidget(facts);
     m_lostInfo=label({},body,"muted");body->addStretch();
     auto actions=new QHBoxLayout;actions->setContentsMargins(16,14,16,16);actions->setSpacing(12);dl->addLayout(actions);
     m_lostPlay=button({},actions,[this]{lostAction(true);},this,true);m_lostPlay->setObjectName("lostPlay");m_lostPlay->setMinimumSize(100,48);m_lostPlay->setIconSize(QSize(18,18));
@@ -615,7 +637,7 @@ QWidget *MainWindow::buildLost() {
         }
     },this,false,"trash-2");m_lostUninstall->setObjectName("lostUninstall");m_lostUninstall->setProperty("danger",true);m_lostUninstall->setMinimumHeight(48);
     connect(m_lost,&QListWidget::currentRowChanged,this,[this]{lostSelection();});
-    label(text("Los paquetes de Windows necesitan Windows o Wine. La disponibilidad depende del archivo original.","Windows packages require Windows or Wine. Availability depends on the original archive.","Pacotes do Windows precisam de Windows ou Wine. A disponibilidade depende do arquivo original."),l,"muted");
+    label(Language::key("Every version runs with Java 8 on Windows, macOS and Linux, and installs only its game, not the launcher it was saved with."),l,"muted");
     return s.widget;
 }
 QWidget *MainWindow::buildPacks() {
@@ -851,8 +873,16 @@ QWidget *MainWindow::buildSettings() {
     column->addStretch();
     return s.widget;
 }
+// Minimized, often while the game runs: the pictures kept for later go, the ones on screen stay.
+void MainWindow::changeEvent(QEvent *event){
+    QMainWindow::changeEvent(event);
+    if(event->type()==QEvent::WindowStateChange&&isMinimized()){m_imageCache.clear();Ui::releaseMemory();}
+}
 void MainWindow::showPage(int i) {
-    if(!m_pages)return;i=qBound(0,i,m_pages->count()-1);m_pages->setCurrentIndex(i);
+    if(!m_pages)return;i=qBound(0,i,m_pages->count()-1);
+    // Leaving Discover or the news: most of their pictures from the internet will not be needed soon.
+    if(const int from=m_pages->currentIndex();from!=i&&(from==Explore||from==News)){m_imageCache.setMaxCost(6*1024);m_imageCache.setMaxCost(24*1024);}
+    m_pages->setCurrentIndex(i);
     {QSignalBlocker block(m_nav);if(i==Settings){m_nav->setCurrentRow(-1);m_nav->clearSelection();}else m_nav->setCurrentRow(i);}
     m_navSettings->setChecked(i==Settings);
     // The mod list loads when the tab opens: popular mods for the selected instance until something is searched.
@@ -1002,15 +1032,36 @@ void MainWindow::refreshLost(){
 QString MainWindow::lostCategory(const QString &category){return category=="horror"?Language::key("Horror"):category=="release"?Language::key("Release"):category=="alpha"?Language::key("Alpha"):category;}
 void MainWindow::lostSelection(){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;
-    auto cover=static_cast<Cover*>(m_lostImage);cover->setArtwork(Ui::lostArtFor(v.id,v.category));
+    auto cover=static_cast<Cover*>(m_lostImage);
+    if(m_lostShots->property("version").toString()!=v.id||v.id.isEmpty()){
+        QSignalBlocker block(m_lostShots);m_lostShots->clear();m_lostShots->setProperty("version",v.id);
+        for(int n=1;n<=v.screenshots;++n){
+            const auto path=QString(":/lost/%1/%2.jpg").arg(v.id).arg(n);auto item=new QListWidgetItem(m_lostShots);item->setData(Qt::UserRole,path);item->setSizeHint(QSize(118,69));
+            item->setToolTip(Language::key("See the screenshots full size"));
+            Ui::loadArt(path,{224,126},m_lostShots,[list=m_lostShots,path](const QPixmap &p){for(int i=0;i<list->count();++i)if(list->item(i)->data(Qt::UserRole).toString()==path)list->item(i)->setIcon(QIcon(Ui::cover(p,{224,126},10)));});
+        }
+        m_lostShots->setVisible(v.screenshots>1);if(m_lostShots->count())m_lostShots->setCurrentRow(0);
+        cover->setArtwork(v.screenshots?QString(":/lost/%1/1.jpg").arg(v.id):Ui::lostArtFor(v.id,v.category));
+        while(auto item=m_lostFacts->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
+        if(!v.id.isEmpty()){
+            int row=0;auto fact=[&](const QString &key,const QString &value){if(value.isEmpty())return;auto k=new QLabel(key);k->setObjectName("lostFactKey");auto val=new QLabel(value);val->setObjectName("lostFactValue");val->setWordWrap(true);val->setTextInteractionFlags(Qt::TextSelectableByMouse);m_lostFacts->addWidget(k,row,0,Qt::AlignTop);m_lostFacts->addWidget(val,row++,1);};
+            fact(Language::key("In game"),v.game);
+            fact(Language::key("Origin"),v.origin=="remake"?Language::key("Remake by EBALIA"):v.origin=="rescued"?Language::key("Rescued by EBALIA"):v.origin=="archive"?Language::key("EBALIA archive"):QString());
+            fact(Language::key("Made by"),v.credit);
+            int sharing=0;for(const auto &other:m_versions->getVersions())if(other.id!=v.id&&other.downloadUrl==v.downloadUrl)++sharing;
+            QStringList size;if(v.installedSize>0)size<<Language::key("%1 MB installed").arg(qMax<qint64>(1,v.installedSize/1048576));
+            if(v.archiveSize>0)size<<(sharing?Language::key("%1 MB download, shared with %2 other versions").arg(v.archiveSize/1048576).arg(sharing):Language::key("%1 MB download").arg(v.archiveSize/1048576));
+            fact(Language::key("Size"),size.join("  ·  "));
+            fact(Language::key("Runs with"),LostNative::available(v.native)?Language::key("Java 8, on Windows, macOS and Linux"):Language::key("Original Windows package. Runs with Java 8, which EBALIA prepares automatically. On Linux and macOS it runs in Wine with its own prefix."));
+        }
+    }
     const bool running=m_java->isRunning();
     const bool present=!v.id.isEmpty()&&m_versions->isVersionInstalled(v);m_lostUninstall->setVisible(present);m_lostUninstall->setEnabled(!running&&!m_jobs);m_lostLog->setVisible(present);
     m_lostPlay->setText("  "+(running?k("Stop"):k("Play")).toUpper());m_lostPlay->setIcon(Ui::icon(running?"square":"play",Qt::white));m_lostPlay->setProperty("danger",running);m_lostPlay->setProperty("play",!running);m_lostPlay->style()->unpolish(m_lostPlay);m_lostPlay->style()->polish(m_lostPlay);
-    m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
+    m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostAbout->clear();m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
     const bool installed=m_versions->isVersionInstalled(v);m_lostTitle->setText(v.name);
-    QStringList info{lostCategory(v.category)+"  ·  "+v.description,installed?text("Instalada","Installed","Instalada"):text("Pendiente de instalación","Not installed yet","Ainda não instalada")};
-    if(!LostNative::available(v.native)&&LostInstaller::windowsPackage(v))info<<Language::key("Original Windows package. Runs with Java 8, which EBALIA prepares automatically. On Linux and macOS it runs in Wine with its own prefix.");
-    else info<<Language::key("Runs with Java 8, which EBALIA prepares automatically.");
+    m_lostAbout->setText(v.about.isEmpty()?v.description:Language::key(v.about));
+    QStringList info{lostCategory(v.category)+"  ·  "+(installed?text("Instalada","Installed","Instalada"):text("Pendiente de instalación","Not installed yet","Ainda não instalada"))};
     if(!installed&&v.archiveSize>0)info<<Language::key("The first installation downloads the original archive (%1 MB); later versions reuse it.").arg(v.archiveSize/1024/1024);
     m_lostInfo->setText(info.join("\n\n"));m_lostInstall->setText("  "+(installed?Language::key("Reinstall"):text("Instalar","Install","Instalar")).toUpper());m_lostPlay->setEnabled(installed||running);
 }
@@ -1351,7 +1402,9 @@ void MainWindow::manageMods(){
             watcher->setFuture(QtConcurrent::run(Ui::backgroundPool(),[path=info.filePath(),cache=m_mc->mcDir()+"/cache/mod-icons",alive]{
                 if(!*alive)return QImage(); // the window closed before its turn came
                 // The picture inside the jar, or else the project's icon on Modrinth.
-                QImage image;image.loadFromData(ModCompat::iconData(path));return image.isNull()?InstanceContent::modrinthIcon(path,cache):image;}));
+                QImage image;image.loadFromData(ModCompat::iconData(path));if(image.isNull())image=InstanceContent::modrinthIcon(path,cache);
+                // Kept for the session at the size the list shows, not as the jar has it (some are 512 pixels or more).
+                return image.width()>64||image.height()>64?image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation):image;}));
         }};refresh();
     // Two rows, so the buttons still fit at the smallest window size: the selected mod, then the folder.
     auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);auto folderRow=new QHBoxLayout;folderRow->setSpacing(8);lay.addLayout(folderRow);
@@ -1602,7 +1655,7 @@ void MainWindow::refreshNews(bool network){
             auto body=new QVBoxLayout;body->setContentsMargins(14,0,14,0);body->setSpacing(4);cl->addLayout(body);
             auto m=elided(body,"newsMeta");m->setText(meta);auto t=label(title,body,"newsTitle");t->setAlignment(Qt::AlignLeft|Qt::AlignTop);body->addStretch();
             for(auto w:{m,t})w->setAttribute(Qt::WA_TransparentForMouseEvents);connect(card,&QPushButton::clicked,this,std::move(open));m_homeNews->addWidget(card,1);
-            loadImage(image,[cover=QPointer<Cover>(cover)](const QPixmap &p){if(cover)cover->setPixmap(p);});
+            loadImage(image,[cover=QPointer<Cover>(cover)](const QPixmap &p){if(cover)cover->setPixmap(p);},960);
         };
         QList<QJsonObject> java,other;for(const auto &v:o["entries"].toArray()){const auto e=v.toObject();if(e["title"].toString().isEmpty())continue;(e["category"].toString().contains("Java")?java:other)<<e;}
         auto cards=java+other;
@@ -1621,7 +1674,7 @@ void MainWindow::refreshNews(bool network){
             const auto image=e["newsPageImage"].toObject()["url"].toString(e["playPageImage"].toObject()["url"].toString());const auto url=image.isEmpty()?QString():"https://launchercontent.mojang.com"+image;
             auto item=new QListWidgetItem(QIcon(Ui::art(Ui::artFor(e["title"].toString()),QSize(176,80),8)),e["title"].toString()+"\n"+e["category"].toString()+"  ·  "+e["date"].toString().left(10)+"\n"+e["text"].toString(),m_news);
             item->setData(Qt::UserRole,e["readMoreLink"].toString(e["link"].toString()));item->setData(Qt::UserRole+1,url);item->setToolTip(e["text"].toString());
-            loadImage(url,[list=QPointer<QListWidget>(m_news),url](const QPixmap &p){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole+1).toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(p,QSize(176,80),8)));});
+            loadImage(url,[list=QPointer<QListWidget>(m_news),url](const QPixmap &p){if(!list)return;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole+1).toString()==url)list->item(n)->setIcon(QIcon(Ui::cover(p,QSize(176,80),8)));},352);
             if(m_news->count()>=30)break;
         }
         if(m_news->count()==0)m_news->addItem(new QListWidgetItem(Ui::icon("newspaper",dim),text("No hay noticias guardadas. Conectate y pulsá Actualizar.","No cached news. Connect and press Refresh.","Sem notícias salvas. Conecte e clique em Atualizar.")));
@@ -1629,6 +1682,12 @@ void MainWindow::refreshNews(bool network){
     auto path=m_root+"/news.json";if(!network){try{render(ModRepository::read(path));}catch(...){render({});}return;}
     auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,render]{auto r=watcher->result();watcher->deleteLater();if(r.contains("entries"))render(r);else if(m_status)m_status->setText(text("Noticias sin conexión: se conserva la última copia.","News offline: keeping the last cached copy.","Notícias offline: mantendo a última cópia salva."));});
     watcher->setFuture(QtConcurrent::run([path]{try{auto o=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://launchercontent.mojang.com/v2/news.json"))).object();if(o["entries"].toArray().isEmpty())throw std::runtime_error("Empty news");ModRepository::write(path,o);return o;}catch(...){return QJsonObject{};}}));
+}
+void MainWindow::openLostScreenshots(int start){
+    if(m_lostShots->count()==0)return;QStringList shots;for(int n=0;n<m_lostShots->count();++n)shots<<m_lostShots->item(n)->data(Qt::UserRole).toString();
+    ModGallery viewer(m_lostTitle->text(),shots,shots,qMax(0,start),[this](const QString &path,std::function<void(const QPixmap &)> done){Ui::loadArt(path,{1920,1080},this,std::move(done));},this);
+    viewer.setObjectName("lostScreenshotsViewer");Ui::openWindow(viewer);
+    m_lostShots->setCurrentRow(viewer.index());
 }
 void MainWindow::lostAction(bool launch){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;if(v.id.isEmpty())return;
@@ -1645,7 +1704,7 @@ void MainWindow::lostAction(bool launch){
         auto root=m_root;const auto libraries=m_mc->mcDir()+"/libraries";const auto player=m_accounts->active().name;
         measuredWork(Language::key("Preparing Java 8 for this version…"),[root,windows,native,v,dest,libraries](const Report &report){
                 QJsonObject r;try{r["java"]=LostInstaller::java(root,windows,[report](int done,int total){report(done,total);});}catch(const std::exception &e){r["warning"]=QString::fromUtf8(e.what());}
-                if(native)LostNative::prepare(v.native,dest,libraries); // errors reach the user through work()
+                if(native){LostInstaller::tidy(v,dest);LostNative::prepare(v.native,dest,libraries);} // errors reach the user through work()
                 return r;},
             [this,v,dest,player,libraries](QJsonObject r){if(r.contains("warning"))m_status->setText(Language::message(r["warning"].toString()));m_java->launch(v,dest,r["java"].toString(),player,libraries);});
         return;

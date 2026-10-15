@@ -45,6 +45,11 @@ QPixmap art(const QString &resource,QSize size,int radius=0);
 // only while the receiver is alive; identical requests share one job and a memory cache.
 void loadArt(const QString &resource,QSize bounds,QObject *receiver,std::function<void(const QPixmap &)> ready);
 QPixmap cachedArt(const QString &resource,QSize bounds);
+// The bounds to load artwork with for an area of this many pixels (logical size × device pixel ratio): one of a few
+// sizes, so areas of similar size share a picture in the cache and none is decoded much larger than it is shown.
+QSize artBounds(QSizeF pixels);
+// Drops the decoded artwork kept for later and gives free memory back to the system (the window was minimized).
+void releaseMemory();
 // A few threads for work nobody waits on (icons, pack descriptions, lookups on Modrinth, skin heads): it can be slow
 // or wait on the network without delaying anything the person asked for, which runs on Qt's own pool.
 QThreadPool *backgroundPool();

@@ -31,6 +31,9 @@
 #include "Archive.hpp"
 #include <QTcpSocket>
 #include <QUrlQuery>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 class UiTests:public QObject {
     Q_OBJECT
 public:
@@ -65,7 +68,11 @@ private slots:
     }
     // Like closing the launcher: what is still downloading stops, so the tests end with their last result.
     void cleanupTestCase(){ModRepository::cancelAll();QThreadPool::globalInstance()->waitForDone(5000);}
-    void initTestCase(){QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
+    void initTestCase(){
+#ifdef __GLIBC__
+        mallopt(M_MMAP_THRESHOLD,256*1024);mallopt(M_ARENA_MAX,4); // as the launcher does in main()
+#endif
+        QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
 
     void bedrockVersionsAndProfile() {
 #ifdef Q_OS_WIN
@@ -634,8 +641,10 @@ private slots:
         auto queueWait=[]{QElapsedTimer t;t.start();auto f=QtConcurrent::run([t]{return t.elapsed();});while(!f.isFinished())QCoreApplication::processEvents(QEventLoop::AllEvents,5);return f.result();};
         // A timer that should fire every 5 ms: the longest gap is the longest freeze.
         QElapsedTimer clock;clock.start();qint64 last=0,worst=0;QTimer beat;beat.setInterval(5);QObject::connect(&beat,&QTimer::timeout,[&]{const auto now=clock.elapsed();worst=std::max(worst,now-last);last=now;});beat.start();
+        // Private memory of the launcher, the figure task managers show (Linux only here: the anonymous pages).
+        auto memory=[]{QFile f("/proc/self/smaps_rollup");if(!f.open(QIODevice::ReadOnly))return QString();for(const auto &line:f.readAll().split('\n'))if(line.startsWith("Anonymous:"))return QString(" · memory %1 MB").arg(line.mid(10).trimmed().split(' ').first().toLongLong()/1024);return QString();};
         auto measure=[&](const char *name,std::function<void()> action,int settle){QTest::qWait(50);worst=0;last=clock.elapsed();QElapsedTimer t;t.start();action();const auto call=t.elapsed();QTest::qWait(settle);
-            qInfo().noquote()<<QString("%1: call %2 ms, worst freeze %3 ms").arg(name,-28).arg(call,5).arg(worst,5);}; // the beat cannot fire while the window is held, so the gap includes any freeze
+            qInfo().noquote()<<QString("%1: call %2 ms, worst freeze %3 ms").arg(name,-28).arg(call,5).arg(worst,5)+memory();}; // the beat cannot fire while the window is held, so the gap includes any freeze
         std::unique_ptr<MainWindow> window;
         measure("start (window)",[&]{window=std::make_unique<MainWindow>();window->resize(1920,1080);window->show();},1500);
         measure("full repaint",[&]{window->repaint();},100);
@@ -830,6 +839,57 @@ private slots:
         QCOMPARE(ModRepository::read(dir+"/instance.json")["icon"].toString(),QString("custom"));QVERIFY(QFile::exists(dir+"/instance-icon.png"));
         QCOMPARE(QImage(dir+"/instance-icon.png").size(),QSize(128,128));
         const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!out.isEmpty()){QDir().mkpath(out);QTest::qWait(300);QVERIFY(window.grab().save(out+"/instance-detail-extras.png"));}
+    }
+    void instanceLogUnderTheGallery(){
+        // The game's log lives in the instance page, under the screenshots and servers; full screen gives it the whole page.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        QString dir;{McInstanceManager manager(data.path());dir=manager.createInstance("Registro","1.20.1","fabric");}
+        {QFile log(dir+"/launcher.log");QVERIFY(log.open(QIODevice::WriteOnly));log.write("[12:00:00] [Render thread/INFO]: Setting user: Steve\n[12:00:01] [main/ERROR]: Missing texture\n");}
+        MainWindow window;window.resize(1280,900);window.show();window.showPage(MainWindow::Instances);QTest::qWait(60);
+        auto card=window.findChild<QFrame*>("instanceCard");QVERIFY(card);QTest::mouseClick(card,Qt::LeftButton,{},QPoint(30,30));QTest::qWait(60);
+        auto detail=static_cast<InstanceDetail*>(window.findChild<QWidget*>("instanceDetail"));auto content=window.findChild<QWidget*>("instanceDetailContent");
+        auto panel=dynamic_cast<LogView*>(detail->findChild<QWidget*>("logPanel"));auto view=detail->findChild<QPlainTextEdit*>("logView");auto servers=window.findChild<QListWidget*>("instanceServers");
+        QVERIFY(panel&&view&&servers&&content);QCOMPARE(panel->folder(),dir);
+        QTRY_VERIFY(view->toPlainText().contains("Missing texture"));
+        QVERIFY(panel->mapTo(content,QPoint()).y()>servers->mapTo(content,QPoint()).y()+servers->height()); // below the screenshots and servers
+        // Lines the game writes appear while the page is open.
+        {QFile log(dir+"/launcher.log");QVERIFY(log.open(QIODevice::Append));log.write("[12:00:02] [Server thread/INFO]: Done\n");}
+        QTRY_VERIFY(view->toPlainText().contains("Server thread/INFO]: Done"));
+        // Full screen: the same view, filling the page; Escape or the back link return it.
+        auto expand=detail->findChild<QToolButton*>("logFullScreen");auto page=detail->findChild<QWidget*>("logPage");QVERIFY(expand&&page);
+        auto filter=panel->findChild<QLineEdit*>("logFilter");filter->setText("error");QCOMPARE(view->toPlainText(),QString("[12:00:01] [main/ERROR]: Missing texture"));
+        expand->click();QVERIFY(page->isVisible());QVERIFY(page->isAncestorOf(panel));QVERIFY(!content->isVisible());
+        QVERIFY(panel->height()>detail->height()/2);QCOMPARE(filter->text(),QString("error")); // what the view had stays
+        QCOMPARE(expand->toolTip(),Language::key("Exit full screen"));
+        const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!out.isEmpty()){QDir().mkpath(out);QVERIFY(window.grab().save(out+"/instance-log-full.png"));}
+        QTest::keyClick(view,Qt::Key_Escape);QVERIFY(!page->isVisible());QVERIFY(content->isVisible());QVERIFY(!page->isAncestorOf(panel));QVERIFY(panel->isVisible());
+        filter->clear();window.findChild<QToolButton*>("showLog")->click();QVERIFY(page->isVisible()); // the log button at the top opens it full screen
+        detail->findChild<QPushButton*>("logBack")->click();QVERIFY(content->isVisible());
+        if(!out.isEmpty()){auto scroll=qobject_cast<QScrollArea*>(content->parentWidget()->parentWidget());if(scroll)scroll->ensureWidgetVisible(panel);QTest::qWait(100);QVERIFY(window.grab().save(out+"/instance-log.png"));}
+    }
+    void lostScreenshotsAndFacts(){
+        // Each lost version shows screenshots taken in it and what it is, in the player's language.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        VersionManager versions;versions.loadVersions();QVERIFY(!versions.getVersions().isEmpty());
+        for(const auto &v:versions.getVersions()){
+            QVERIFY2(v.screenshots>=3,qPrintable(v.id));QVERIFY2(!v.about.isEmpty()&&!v.game.isEmpty()&&v.installedSize>0,qPrintable(v.id));
+            for(int n=1;n<=v.screenshots;++n){QImageReader shot(QString(":/lost/%1/%2.jpg").arg(v.id).arg(n));QVERIFY2(shot.canRead(),qPrintable(v.id));QCOMPARE(shot.size(),QSize(1280,720));}
+            QVERIFY2(Language::key(v.about)!=v.about,qPrintable(v.id)); // translated
+        }
+        MainWindow window;window.resize(1400,900);window.show();window.showPage(MainWindow::Lost);QTest::qWait(60);
+        auto list=window.findChild<QListWidget*>("lostList");auto shots=window.findChild<QListWidget*>("lostShots");auto about=window.findChild<QLabel*>("lostAbout");QVERIFY(list&&shots&&about);
+        int ghost=-1;for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toString()=="ghost")ghost=n;QVERIFY(ghost>=0);
+        list->setCurrentRow(ghost);QTest::qWait(50);VersionInfo v;for(const auto &entry:versions.getVersions())if(entry.id=="ghost")v=entry;
+        QCOMPARE(shots->count(),v.screenshots);QCOMPARE(about->text(),Language::key(v.about));QVERIFY(about->text().contains("Locod"));
+        QStringList facts;for(auto label:window.findChildren<QLabel*>("lostFactValue"))if(label->isVisible())facts<<label->text();
+        QVERIFY(facts.contains("Minecraft Ghost"));QVERIFY(facts.contains(Language::key("Rescued by EBALIA")));QVERIFY(facts.contains("Locod"));
+        QVERIFY(facts.join("|").contains(Language::key("Java 8, on Windows, macOS and Linux")));
+        QTRY_VERIFY(!shots->item(2)->icon().isNull());
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QTest::qWait(300);QVERIFY(window.grab().save(out+"/lost-screenshots.png"));}
+        // The full-size viewer opens at the picture chosen, and leaves it chosen.
+        QTimer::singleShot(200,&window,[&]{auto viewer=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!viewer)for(auto w:QApplication::topLevelWidgets())if(w->objectName()=="lostScreenshotsViewer"&&w->isVisible())viewer=qobject_cast<QDialog*>(w);
+            QVERIFY(viewer);QCOMPARE(viewer->objectName(),QString("lostScreenshotsViewer"));QTest::keyClick(viewer,Qt::Key_Right);viewer->reject();});
+        emit shots->itemActivated(shots->item(1));QCOMPARE(shots->currentRow(),2);
     }
     void dialogOpenedFromAPageStaysUsable(){
         // Regression: the skin import dialog (a child of a page) opened with Save and Cancel disabled.

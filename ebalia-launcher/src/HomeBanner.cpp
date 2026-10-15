@@ -46,8 +46,7 @@ HomeBanner::HomeBanner(QWidget *parent):QWidget(parent),m_rotation(this),m_fade(
     m_fade.setDuration(650);m_fade.setStartValue(0.0);m_fade.setEndValue(1.0);m_fade.setEasingCurve(QEasingCurve::InOutCubic);
     connect(&m_fade,&QVariantAnimation::valueChanged,this,[this](const QVariant &value){m_opacity=value.toReal();update();});
     connect(&m_fade,&QVariantAnimation::finished,this,[this]{m_previous={};m_previousScaled={};});
-    loadSlide(m_index);updateControls();
-    for(int i=1;i<slideCount();++i)Ui::loadArt(artwork(i),{1920,1080},this,[](const QPixmap &){});
+    updateControls(); // the first picture loads once the banner has its size
 }
 int HomeBanner::slideCount()const{return int(std::size(slides));}
 void HomeBanner::selectSlide(int index){
@@ -55,10 +54,16 @@ void HomeBanner::selectSlide(int index){
     if(index==m_index){updateControls();return;}
     m_index=index;updateControls();loadSlide(index);updateRotation();
 }
+// Pictures load at the size the banner has on screen; only the next one is read ahead, while the backgrounds rotate.
+QSize HomeBanner::bounds()const{return Ui::artBounds(QSizeF(size())*devicePixelRatioF());}
 void HomeBanner::loadSlide(int index){
-    Ui::loadArt(artwork(index),{1920,1080},this,[this,index](const QPixmap &image){
-        if(index!=m_index||image.isNull())return;m_fade.stop();m_previous=m_image;m_previousIndex=m_loadedIndex;m_loadedIndex=index;m_image=image;
+    if(width()<=1)return;const auto wanted=bounds();
+    Ui::loadArt(artwork(index),wanted,this,[this,index,wanted](const QPixmap &image){
+        if(index!=m_index||image.isNull())return;m_fade.stop();
+        if(m_loadedIndex==index&&!m_image.isNull()){m_image=image;m_bounds=wanted;cacheImages();update();return;} // the same picture, sharper or smaller
+        m_previous=m_image;m_previousIndex=m_loadedIndex;m_loadedIndex=index;m_image=image;m_bounds=wanted;
         m_opacity=m_previous.isNull()||!isVisible()?1:0;cacheImages();if(m_opacity==0)m_fade.start();update();
+        if(m_rotation.isActive())Ui::loadArt(artwork((index+1)%slideCount()),wanted,this,[](const QPixmap &){});
     });
 }
 void HomeBanner::updateControls(){
@@ -82,6 +87,6 @@ void HomeBanner::paintEvent(QPaintEvent *){
 void HomeBanner::resizeEvent(QResizeEvent *event){
     // Large windows give the covers below more height; the banner grows with the width so it is never squeezed to a strip.
     if(const int height=qBound(200,int(width()*0.27),440);minimumHeight()!=height)setMinimumHeight(height);
-    QWidget::resizeEvent(event);cacheImages();m_title->setStyleSheet(width()<800?"font-size:22px;":"font-size:30px;");}
+    QWidget::resizeEvent(event);if(bounds()!=m_bounds)loadSlide(m_index);cacheImages();m_title->setStyleSheet(width()<800?"font-size:22px;":"font-size:30px;");}
 void HomeBanner::showEvent(QShowEvent *event){QWidget::showEvent(event);updateRotation();}
-void HomeBanner::hideEvent(QHideEvent *event){m_rotation.stop();m_fade.stop();m_opacity=1;m_previous={};m_previousScaled={};QWidget::hideEvent(event);}
+void HomeBanner::hideEvent(QHideEvent *event){m_rotation.stop();m_fade.stop();m_opacity=1;m_previous={};m_previousScaled={};m_scaled={};QWidget::hideEvent(event);} // remade at the next paint

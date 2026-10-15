@@ -31,6 +31,9 @@
 #include "VersionManager.hpp"
 #include <cstdio>
 #include <cstdlib>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 #include <QSettings>
 #include <QLocale>
 #include <QFileInfo>
@@ -59,6 +62,11 @@ static void setEnvironment(const char *name,const QString &value){
 }
 class ButtonTranslator:public QTranslator { public: QString translate(const char *,const char *s,const char *,int) const override {return Language::standard(QString::fromUtf8(s));} bool isEmpty() const override {return false;} };
 int main(int argc,char **argv){
+#ifdef __GLIBC__
+    // Pictures are large blocks: mapped on their own they go back to the system when freed, instead of staying in a heap
+    // that only grows. A few heaps for the worker threads are enough, and memory is not split between many.
+    mallopt(M_MMAP_THRESHOLD,256*1024);mallopt(M_ARENA_MAX,4);
+#endif
     // Command-line test modes: on Windows the launcher is a GUI program whose standard error may not reach the caller.
     if(const char *testLog=std::getenv("EBALIA_TEST_LOG");testLog&&*testLog){if(std::freopen(testLog,"a",stderr))std::setvbuf(stderr,nullptr,_IONBF,0);}
     auto checkpoint=[](const char *step){if(std::getenv("EBALIA_TEST_LOG"))std::fprintf(stderr,"[start] %s\n",step);};
@@ -107,7 +115,7 @@ int main(int argc,char **argv){
     int lostLaunch=cli.indexOf("--lost-launchtest");if(lostLaunch>=0&&lostLaunch+1<cli.size()){
         VersionManager vm;vm.loadVersions();VersionInfo version;for(auto v:vm.getVersions())if(v.id==cli[lostLaunch+1])version=v;if(version.id.isEmpty()||!vm.isVersionInstalled(version)){fprintf(stderr,"Version not installed\n");return 1;}
         const bool native=LostNative::available(version.native);const auto libraries=root+"/mc/libraries";
-        QString java;try{java=LostInstaller::java(root,!native&&LostInstaller::windowsPackage(version),[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});if(native)LostNative::prepare(version.native,vm.getInstallPath(version),libraries);}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}
+        QString java;try{java=LostInstaller::java(root,!native&&LostInstaller::windowsPackage(version),[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});if(native){LostInstaller::tidy(version,vm.getInstallPath(version));LostNative::prepare(version.native,vm.getInstallPath(version),libraries);}}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}
         fprintf(stderr,"\nJava 8: %s\n",java.toUtf8().constData());JavaRunner runner;bool started=false;
         QObject::connect(&runner,&JavaRunner::processStarted,&app,[&]{started=true;fprintf(stderr,"PROCESS STARTED\n");const int seconds=qEnvironmentVariableIntValue("EBALIA_LAUNCHTEST_SECONDS");QTimer::singleShot((seconds>0?seconds:40)*1000,&runner,[&]{runner.stop();});});
         QObject::connect(&runner,&JavaRunner::processFinished,&app,[&](int code){fprintf(stderr,"PROCESS ENDED code=%d\n",code);app.exit(started?0:1);});

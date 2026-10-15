@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "Archive.hpp"
 #include <archive.h>
 #include <archive_entry.h>
@@ -50,7 +51,7 @@ QString entryName(archive_entry *entry) {
     return {};
 }
 }
-void Archive::extract(const QString &file, const QString &destination, const QString &prefix) {
+void Archive::extract(const QString &file, const QString &destination, const QString &prefix, const QStringList &only) {
     auto fail = [](const QString &s) { throw std::runtime_error(s.toStdString()); };
     Utf8Names utf8;
     std::unique_ptr<archive, decltype(&archive_read_free)> a(archive_read_new(), archive_read_free);
@@ -62,6 +63,7 @@ void Archive::extract(const QString &file, const QString &destination, const QSt
         auto name = entryName(entry); name.replace('\\','/');
         if (name.isEmpty()) fail("Nombre ilegible dentro del ZIP.");
         if(!prefix.isEmpty()){auto base=prefix;while(base.endsWith('/'))base.chop(1);if(!name.startsWith(base+"/")){archive_read_data_skip(a.get());continue;}name=name.mid(base.size()+1);if(name.isEmpty())continue;}
+        if(!only.isEmpty()){const auto path=name.endsWith('/')?name.chopped(1):name;if(std::none_of(only.cbegin(),only.cend(),[&](const QString &keep){return path==keep||path.startsWith(keep+"/");})){archive_read_data_skip(a.get());continue;}}
         auto parts = name.split('/');
         if (QDir::isAbsolutePath(name) || parts.contains("..") || name.contains(':') || archive_entry_symlink(entry) || archive_entry_hardlink(entry)) fail("Ruta insegura dentro del ZIP: " + name);
         const auto type = archive_entry_filetype(entry);

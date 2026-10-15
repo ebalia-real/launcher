@@ -24,13 +24,15 @@ private:
     void updateRotation();
     void cacheImages();
     void loadSlide(int index);
+    QSize bounds() const;
     QTimer m_rotation;
     QVariantAnimation m_fade;
     QPixmap m_image,m_previous,m_scaled,m_previousScaled;
     QLabel *m_theme,*m_title;
     QToolButton *m_pause;
     QList<QToolButton*> m_dots;
-    int m_index=0,m_previousIndex=0,m_loadedIndex=0;
+    QSize m_bounds;
+    int m_index=0,m_previousIndex=0,m_loadedIndex=-1;
     qreal m_opacity=1;
     bool m_paused=false;
 };
