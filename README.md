@@ -13,99 +13,113 @@
 
 [![Compilación y pruebas](https://github.com/ebalia-real/launcher/actions/workflows/ebalia-launcher.yml/badge.svg)](https://github.com/ebalia-real/launcher/actions/workflows/ebalia-launcher.yml)
 
+**Español** · [English](README.en.md)
+
 ## Descargar e instalar
 
-La [página oficial](https://ebalia.gitgud.site/#descargas) detecta el idioma del navegador, muestra la versión publicada y ofrece las descargas sin salir a una página de GitHub. Consulta las versiones de GitHub y GitGud cada minuto mientras está abierta.
+La [página oficial](https://ebalia.gitgud.site/#descargas) detecta el idioma del navegador, muestra la versión más nueva publicada en GitHub o GitGud y el SHA-256 de cada paquete con el comando para comprobarlo. Mientras está visible, vuelve a consultar las versiones cada 10 minutos como máximo. Los enlaces de esta tabla descargan siempre la última versión de GitHub (ahora, **1.2.0**).
 
 | Sistema | Paquete | Instalación |
 | --- | --- | --- |
-| Windows 10 / 11 · x64 | [Instalador `.exe`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-setup.exe) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-portable.zip) | Instalador: ejecutalo y seguí el asistente (incluye Visual C++ y el acceso directo). Portable: descomprimilo en cualquier carpeta o USB y abrí `ebalia-launcher.exe`, sin instalar. |
-| macOS · Apple Silicon | [`.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64.dmg) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64-portable.zip) | Abrí la imagen y copiá la aplicación a tus aplicaciones, o descomprimí la versión portable donde quieras. |
+| Windows 10 / 11 · x64 | [Instalador `.exe`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-setup.exe) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-portable.zip) | Instalador: ejecutalo y seguí el asistente. Instala solo para tu usuario, sin permisos de administrador, en `%LOCALAPPDATA%\Programs\EBALIA Launcher`, crea accesos directos en el menú Inicio y el escritorio, incluye las DLL de Visual C++ y reutiliza una instalación existente. Portable: descomprimilo en cualquier carpeta o USB y abrí `ebalia-launcher.exe`, sin instalar. |
+| macOS · Apple Silicon | [`.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64.dmg) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64-portable.zip) | Abrí la imagen y copiá `ebalia-launcher.app` a tus aplicaciones, o descomprimí la versión portable donde quieras. |
 | macOS · Intel | [`.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-x64.dmg) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-x64-portable.zip) | Igual que Apple Silicon. |
-| Linux · x64 (cualquier distribución) | [AppImage](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64.AppImage) · [Portable `.tar.gz`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64-portable.tar.gz) | Trae Qt, libarchive y OpenSSL: `chmod +x ebalia-linux-x86_64.AppImage` y abrilo. Funciona en distribuciones con glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora, Arch, openSUSE…). |
+| Linux · x86_64 (cualquier distribución) | [AppImage](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64.AppImage) · [Portable `.tar.gz`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64-portable.tar.gz) | Trae Qt, libarchive y OpenSSL: `chmod +x ebalia-linux-x86_64.AppImage` y abrilo. Funciona con glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora, Arch, openSUSE Tumbleweed, Mint 21+). Sin FUSE, abrilo con `APPIMAGE_EXTRACT_AND_RUN=1`. Alpine/musl y ARM necesitan su propia compilación. |
+| Linux · Ubuntu 24.04 / Mint 22 · x64 | [`.tar.gz` clásico](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x64.tar.gz) | Usa el Qt del sistema: instalá `libqt6widgets6 libqt6network6 libqt6concurrent6 qt6-qpa-plugins qt6-image-formats-plugins libarchive13t64`, descomprimilo y abrí `bin/ebalia-launcher`. No funciona directamente en NixOS. |
 | NixOS | Flake del proyecto | Nix prepara las dependencias y compila el launcher. Usá las instrucciones de abajo. |
 
-Las versiones **portables** guardan instancias, mundos, cuentas y ajustes en la carpeta `ebalia-data` de al lado, gracias al archivo `portable.txt` que incluyen; podés llevarlas en un USB. Los enlaces apuntan a la última versión publicada; los paquetes de una versión nueva aparecen después de que sus compilaciones y pruebas terminen. Windows y macOS se distribuyen actualmente sin firma digital del editor (en macOS, la primera vez abrí la app con clic derecho → Abrir).
+Las versiones **portables** incluyen un archivo `portable.txt`. Mientras esté junto al programa (la carpeta del `.exe` en Windows, la que contiene la `.app` en macOS, la del AppImage en Linux), instancias, mundos, mods, cuentas y ajustes se guardan en la carpeta `ebalia-data` de al lado, y podés llevar todo en un USB. Borrá `portable.txt` para volver a la carpeta de datos normal del sistema.
+
+Los paquetes de Windows y macOS se distribuyen **sin firma digital** del editor (en macOS, la primera vez abrí la app con clic derecho → Abrir). Cada versión publica `SHA256SUMS.txt` con el SHA-256 de todos sus archivos: comprobá cada descarga con `certutil -hashfile <archivo> SHA256` (Windows), `shasum -a 256 <archivo>` (macOS) o `sha256sum <archivo>` (Linux). Los paquetes de una versión nueva aparecen recién cuando terminaron sus compilaciones y pruebas.
 
 ### NixOS
 
 ```sh
-mkdir ebalia-launcher-1.1.0
-cd ebalia-launcher-1.1.0
-nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.1.0?dir=ebalia-launcher'
+mkdir ebalia-launcher-1.2.0
+cd ebalia-launcher-1.2.0
+nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.2.0?dir=ebalia-launcher'
 ./result/bin/ebalia-launcher
 ```
 
-Creá la carpeta sin `sudo`. La primera compilación puede tardar y descargar dependencias. Para Bedrock en NixOS también hace falta habilitar Flatpak en la configuración del sistema.
+Creá la carpeta sin `sudo`. La primera compilación puede tardar y descargar dependencias; el paquete corre las pruebas al compilar y le da al launcher Java 8, 17, 21 y 25. Para Bedrock en NixOS también hace falta `services.flatpak.enable = true` en la configuración del sistema (y reconstruirlo).
 
-## Novedades de 1.1.0
+## Novedades de 1.2.0
 
-- **Actualizar y reiniciar:** el launcher descarga y verifica la versión nueva, comprueba su arranque y reemplaza los archivos del programa. No hace falta abrir la web para las actualizaciones compatibles posteriores.
-- **Datos conservados:** actualizar mantiene instancias, Lost Versions, mundos, mods, cuentas, ajustes y contenido descargado. La copia anterior del programa y los temporales se eliminan después de un arranque correcto.
-- **Guía interactiva inicial:** un recorrido de 14 pasos destaca los controles y explica las secciones. Tiene Atrás, Siguiente y Omitir; se puede repetir desde **Guía y tutorial**.
-- **Instalador Windows:** detecta una instalación existente, incluye las DLL de Visual C++ y crea el acceso directo.
-- **Lost Versions:** botón para desinstalar con confirmación. Las operaciones muestran su progreso en la barra inferior.
-- **Bedrock · Beta:** preparación y apertura de un gestor externo, con requisitos de cuenta diferenciados según el sistema.
+- **Cerca de la mitad de memoria:** las imágenes se cargan al tamaño en que se muestran, los cachés de imágenes son más chicos y minimizar el launcher (como al jugar) libera las imágenes guardadas. En Linux, la memoria liberada vuelve al sistema.
+- **Las versiones perdidas instalan solo su juego:** sin el launcher con el que se guardaron algunos paquetes (UltimMC, BetaCraft) ni otras versiones, así que NSSS ocupa 4 MB en vez de 700. Las instaladas antes se ordenan en su siguiente inicio y conservan mundos, opciones y registro.
+- **Capturas y ficha de cada versión perdida:** capturas tomadas en esa versión (imagen grande, tira para elegir otra y visor a tamaño completo), una descripción más larga en cada idioma, qué muestra el juego como versión, su origen, quién la hizo, su tamaño y con qué funciona.
+- **Minecraft 1.Li02 crea mundos:** ya no se cierra al crear un mundo. EBALIA corrige esa pantalla sin cambiar los archivos del juego, y funcionan Supervivencia y Extremo.
+- **Registro en vivo en la página de la instancia:** debajo de capturas y servidores, sigue al juego mientras corre. **Pantalla completa** le da toda la página; Escape o el enlace de volver regresan.
 
-Si venís de **1.0.0**, instalá **1.1.0 una vez** para obtener el nuevo actualizador. No hace falta desinstalar previamente ni borrar tus datos. [Notas de la versión](ebalia-launcher/CHANGELOG.md).
+Si venís de **1.0.0**, instalá **1.2.0 una vez** a mano, porque 1.0.0 no trae este actualizador; después las actualizaciones llegan desde el launcher. No hace falta desinstalar antes ni borrar tus datos. Entre 1.1.1 y 1.1.9 llegaron, entre otras cosas, paquetes de recursos y shaders en Explorar mods, la marca «Ya instalado», skins en 3D y temas. [Notas de todas las versiones](ebalia-launcher/CHANGELOG.md) (en inglés).
 
 ## Qué podés hacer
 
 | Sección | Funciones |
 | --- | --- |
-| Inicio | Fondos rotativos, selector de instancia, Jugar, noticias y Mis Mods. |
-| Instancias | Perfiles independientes con mundos, mods y ajustes propios; grupos, copia, importación, exportación y registros. |
-| Mods y modpacks | Vanilla, Fabric, Quilt, Forge y NeoForge; integración con Modrinth, CurseForge, ATLauncher, FTB y Technic. Algunas plataformas requieren su configuración de API. |
-| Lost Versions | Archivo de versiones de EBALIA, portadas distintas, instalación independiente y diagnóstico. Los paquetes originales de Windows requieren Windows o Wine. |
-| Mis packs y skins | Selecciones reutilizables de mods y administración de skins según el tipo de cuenta. |
-| Noticias y comunidad | Noticias de Minecraft, publicaciones de EBALIA, Mis Mods y Patreon. El contenido privado requiere una membresía válida vinculada. |
-| Ajustes y guía | Configuración de Java, recursos, idioma y acceso permanente al recorrido interactivo. |
+| Inicio | Banner con cuatro fondos que rotan cada 9 s (flechas, puntos y una pausa que se recuerda), selector de instancia, **Jugar** con tu nombre y avatar, las tarjetas **EBALIA Mods** con el botón **EBALIA · Patreon**, y **Novedades**. |
+| Instancias | Perfiles independientes con mundos, mods y ajustes propios, en grupos plegables, con filtros (todas, vanilla, con mods, modpacks) y búsqueda. Copiar, exportar a ZIP, cambiar de grupo y eliminar, que mueve la instancia y sus mundos a una papelera local después de confirmar. |
+| Crear e importar | Personalizado, ATLauncher, CurseForge, FTB, FTB Legacy, app de FTB, Modrinth y Technic, con Vanilla, Fabric, Quilt, Forge o NeoForge. Importa `.mrpack`, ZIP de CurseForge, Prism Launcher/MultiMC, Technic y ATLauncher, carpetas de las apps de CurseForge y FTB, exportaciones y packs de EBALIA y carpetas `.minecraft` (TLauncher, SKLauncher), también desde un enlace https o arrastrando el archivo. Avisa qué mods no coinciden con la versión o el cargador. |
+| Página de la instancia | Cargador, versión, memoria y grupo; **Jugar** instala lo que falte. Tarjetas de Mods, Paquetes de recursos, Shaders y Mundos; hasta 30 capturas (F2 en el juego); servidores de `servers.dat`; registro en vivo con filtro, **Copiar** y pantalla completa; fondo e icono a elección. |
+| Ventanas y ajustes de la instancia | Mods con su icono para activar, quitar o agregar un JAR local; paquetes de recursos con su imagen y descripción, para activarlos o desactivarlos (el último activado queda arriba); un shader a la vez, con Iris u Oculus; mundos que se exportan e importan en ZIP. Ajustes: icono, nombre, memoria (512–65536 MB), fondo, Java, **Registro** y **Reparar instalación**. |
+| Explorar mods | Mods, paquetes de recursos y shaders de Modrinth o CurseForge. Elegí varios con Ctrl/Shift y un solo **Instalar (N)** los instala con sus dependencias; lo que ya tenés aparece como «Ya instalado». La página del mod muestra su galería y la descripción completa. |
+| Versiones perdidas | 15 versiones del archivo de EBALIA, cada una con sus capturas y su ficha. Funcionan con Java 8 en Windows, macOS y Linux (uno detectado o el jre-legacy de Mojang, que se descarga solo), guardan sus partidas en su propia carpeta y tienen botones de carpeta y registro. **Desinstalar** las mueve con sus mundos a la papelera del sistema. |
+| Mis packs | **Guardar mods como pack** en una instancia, **Importar pack** y **Exportar pack** (`.json`) y **Aplicar a una instancia**. |
+| Skins | Modelo 3D (arrastrá para girar, **Frente / espalda**, **Vista 2D**). Importá un PNG de 64 × 64 o 64 × 32, Clásico o Brazos finos, y aplicalo a la cuenta Microsoft o localmente a una instancia (los de 64 × 32 solo con Clásico; aplicar localmente necesita 64 × 64). |
+| Noticias y Comunidad | Noticias de Minecraft y de EBALIA · Patreon. Comunidad: Fan arts, Servidores, Aprender, Soporte y comunidad, y EBALIA · Patreon, con publicaciones públicas sin iniciar sesión y las exclusivas al vincular una membresía de pago activa de Patreon. |
+| Guía y tutorial | Recorrido interactivo de 14 pasos con Silence, que arranca solo la primera vez y tiene sonidos que se pueden silenciar; pasos de la guía y 12 preguntas frecuentes. |
+| Ajustes | Cuentas Microsoft o perfiles no premium, idioma, temas (EBALIA, Deep Dark, Nether, End, Océano, Cerezo y Personalizado), **Preparación y diagnóstico** (Java, OpenGL, OpenAL, Wine), clave de CurseForge y carpetas de datos y de papelera. |
 
-La interfaz principal dispone de diez idiomas y se adapta desde 640 × 480. La guía interactiva nueva está disponible en español e inglés. Java se detecta o se prepara según las necesidades de la instancia; el paquete Nix incorpora las rutas necesarias.
+La interfaz y el recorrido están en diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. La ventana funciona desde 640 × 480; en Wayland con GNOME dibuja su propia barra de título (`EBALIA_TITLE_BAR=system` o `custom` para elegir). No hace falta configurar Java: EBALIA usa un Java compatible que ya tengas o descarga el oficial de Mojang que pide cada versión (en NixOS usa los del paquete Nix), y podés elegir otro en los ajustes de la instancia. Cerrar el launcher lo termina al instante.
 
 ## Actualizaciones y archivos del usuario
 
-El launcher consulta versiones estables al iniciar y periódicamente. El aviso permite **Actualizar y reiniciar** o **Más tarde**. Antes de actualizar hay que cerrar las partidas administradas por EBALIA y esperar a que terminen las instalaciones.
+El launcher busca una versión estable nueva 5 segundos después de abrirse y luego cada 6 horas. Consulta GitHub primero y usa GitGud solo si GitHub falla o no muestra nada más nuevo. Cuando hay una, aparece **Actualizar a &lt;versión&gt;** en la barra lateral y el aviso permite **Actualizar y reiniciar** o **Más tarde**. Antes de actualizar, cerrá las partidas y esperá a que terminen las instalaciones.
 
-Los paquetes se descargan por HTTPS y se verifican con el SHA-256 publicado. La versión nueva se prepara y prueba antes de reemplazar los archivos del programa. Si la preparación falla, la versión actual permanece abierta; si falla el reemplazo, se restauran los archivos anteriores.
+Descarga `SHA256SUMS.txt` y el paquete de tu sistema, comprueba el SHA-256, lo prepara en `<datos>/updates` y prueba que arranque antes de reemplazar nada. Si falla la copia o el segundo arranque, se restauran los archivos anteriores. En Windows y Linux (`.tar.gz`) se reemplazan solo los archivos del manifiesto `update-files.json`; en macOS, el bundle `.app`; con AppImage, solo el archivo `.AppImage`. La carpeta de instalación debe permitir escritura para tu usuario. En NixOS se compila la versión nueva con `nix build` y los siguientes inicios usan esa compilación.
 
-El actualizador de Windows/Linux utiliza un manifiesto de archivos del programa: los archivos ajenos a ese manifiesto se conservan. En macOS se reemplaza el bundle de la aplicación. La carpeta de instalación debe permitir escritura para tu usuario. En NixOS se construye la nueva versión con Nix y se cambia la versión activa; las rutas antiguas compartidas del almacén quedan sujetas a la recolección de basura de Nix.
+Actualizar conserva instancias, Versiones perdidas, mundos, mods, cuentas y ajustes (y en modo portable, `portable.txt` y `ebalia-data`), y **no cambia la versión de Minecraft de tus instancias**. Tampoco equivale a desinstalar una versión perdida: esa acción separada mueve su carpeta y sus mundos a la papelera, después de una confirmación.
 
-Actualizar el launcher **no actualiza automáticamente la versión de Minecraft de tus instancias**. Tampoco equivale a desinstalar una Lost Version: esa acción separada mueve su carpeta y sus mundos a la papelera, después de una confirmación.
+Los datos están en la carpeta de datos de aplicaciones del sistema (`EBALIA/EBALIA Launcher`), en `ebalia-data` en modo portable o donde indique `EBALIA_DATA_DIR`; **Ajustes → Datos → Abrir carpeta de datos** la abre. Adentro, las instancias van en `mc/instances`, los archivos compartidos en `mc/libraries` y `mc/assets`, el Java descargado en `mc/java` y los packs en `packs`.
 
 ## Bedrock · Beta
 
-Bedrock se integra mediante gestores externos y no incluye el juego ni una licencia.
+EBALIA abre tu propia copia de Minecraft Bedrock: nunca descarga, desbloquea ni importa el juego, y no incluye una licencia.
 
-| Sistema | Gestor | Cuenta necesaria para obtener el juego |
+| Sistema | Cómo funciona | De dónde sale el juego |
 | --- | --- | --- |
-| Windows | [BedrockLauncher](https://github.com/BedrockLauncher/BedrockLauncher) | Microsoft con Minecraft para Windows o una suscripción de Game Pass que incluya esa edición. |
-| Linux / macOS | [Minecraft Linux Launcher](https://minecraft-linux.github.io/) | Google Play con la edición Android. Microsoft/Xbox se utiliza por separado para funciones del juego. |
+| Windows | Detecta Minecraft para Windows y Minecraft Preview, además de Gaming Services, y los abre directamente con `minecraft:` / `minecraft-preview:`, sin otro launcher. Desinstalar copia antes los mundos; en máquinas virtuales sin GPU avisa, porque Bedrock usa DirectX. | Microsoft Store (producto 9NBLGGH2JHXJ) o la app de Xbox (Game Pass). La Store lo mantiene actualizado. |
+| Linux | La edición Android con [Minecraft Linux](https://minecraft-linux.github.io/), la app de Flathub `io.mrarm.mcpelauncher`. EBALIA crea el perfil `EBALIA` y lo inicia en modo perfil, que mantiene la comprobación de compra. Necesita Flatpak. | Google Play, con la cuenta que compró la edición Android. El inicio de sesión y las descargas se hacen en la ventana de Minecraft Linux. |
+| macOS | Minecraft Linux para macOS: el `.dmg` estable más nuevo de minecraft-linux/macos-builder, verificado con su sha256. Necesita Apple Silicon y macOS 15 o posterior; los Mac Intel no son compatibles. | Google Play, igual que en Linux. |
 
-**Comprar Bedrock para Windows no habilita la descarga Android en Linux/macOS.** El botón prepara el gestor y las dependencias compatibles; el inicio de sesión y la descarga del juego se completan en ese gestor. Algunas configuraciones requieren una acción del sistema, como habilitar Flatpak o el modo desarrollador de Windows.
-
-Se verificó la instalación del gestor en Linux. No se ha validado una partida real de Bedrock en todos los sistemas ni se garantiza compatibilidad con la última versión del juego en todas las GPU. [Detalles de la integración](ebalia-launcher/BEDROCK.md).
+**Comprar Bedrock para Windows no habilita la descarga Android en Linux/macOS.** La cuenta Microsoft/Xbox se usa dentro del juego (Linux, macOS) o en la app de Xbox (Windows). La página busca el juego una vez y de nuevo después de lo que hagas desde el launcher o con **Comprobar de nuevo**; en Linux y macOS, el registro de la última partida queda en `bedrock/last-game.log` (dentro de la carpeta de datos). [Detalles de la integración](ebalia-launcher/BEDROCK.md) (en inglés).
 
 ## Compilar y colaborar
 
-El código está en [`ebalia-launcher/`](ebalia-launcher). Requiere C++20, CMake ≥ 3.21, Qt ≥ 6.4 y libarchive. Las pruebas también usan Qt Test.
+El código está en [`ebalia-launcher/`](ebalia-launcher). Requiere CMake ≥ 3.21, un compilador C++20, Qt ≥ 6.4 (Widgets, Network y Concurrent; Qt Test para las pruebas) y libarchive. md4c viene incluido en `third_party`; con Python 3 se suman dos pruebas.
 
 ```sh
 git clone https://github.com/ebalia-real/launcher.git
 cd launcher/ebalia-launcher
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel 2
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix package
 ```
 
-En Linux sin pantalla, ejecutá CTest con `QT_QPA_PLATFORM=offscreen`. Windows usa MSVC/vcpkg; macOS usa Qt y libarchive de Homebrew. El [workflow](.github/workflows/ebalia-launcher.yml) compila y prueba cada plataforma. Las etiquetas de versión publican los paquetes y sus checksums solo después de que las tres plataformas pasen.
+Las pruebas ya usan `QT_QPA_PLATFORM=offscreen`, así que `ctest` funciona sin pantalla. Windows usa MSVC y libarchive de vcpkg; macOS, Qt y libarchive de Homebrew; en NixOS, `nix build` dentro de `ebalia-launcher/` o `scripts/build-local.sh`. La clave de CurseForge (`-DEBALIA_CURSEFORGE_API_KEY` o `curseforge-api-key.txt`) y el ID de cliente de Microsoft (`-DEBALIA_MS_CLIENT_ID`) se pasan al configurar.
+
+El [workflow de GitHub Actions](https://github.com/ebalia-real/launcher/blob/main/.github/workflows/ebalia-launcher.yml) compila y prueba cada push a `main` o pull request que toque `ebalia-launcher/` o el workflow (los cambios solo en la web o en el README no lo disparan): Linux (Ubuntu 24.04), AppImage (Ubuntu 22.04; se comprueba que arranque en Debian 12, Fedora, Arch y openSUSE Tumbleweed), Windows (Windows 2022, Qt 6.8.3, MSVC 2022) y macOS (arm64 e Intel). Una etiqueta `v*` publica la versión, con sus paquetes y `SHA256SUMS.txt`, solo si pasan los cinco trabajos (Linux, AppImage, arranque del AppImage en otras distribuciones, Windows y macOS) y la etiqueta coincide con la versión de CMake.
 
 - [Documentación técnica y configuración](ebalia-launcher/README.md)
+- [Notas de las versiones](ebalia-launcher/CHANGELOG.md) (en inglés)
+- [Integración de Bedrock](ebalia-launcher/BEDROCK.md) (en inglés)
 - [Servicio de Patreon](ebalia-launcher/services/patreon/README.md)
-- [Código de la web](site/README.md)
-- [Repositorio espejo en GitGud](https://gitgud.io/castigarse/launcher)
+- [Código de la web](site/README.md) y [su generador](site-src/README.md) (en inglés)
+- [Repositorio espejo en GitGud](https://gitgud.io/castigarse/launcher): GitHub es el repositorio principal. El espejo recibe el código (sin los workflows de GitHub) y sus versiones, que enlazan a los paquetes publicados en GitHub, con un paso manual (`ebalia-launcher/scripts/publish-gitgud.sh`), así que puede ir detrás de GitHub.
 
-No publiques contraseñas, tokens ni claves privadas al reportar errores. Incluí el sistema, la versión del launcher y el registro relevante.
+Reportá los problemas en [GitHub Issues](https://github.com/ebalia-real/launcher/issues). Incluí el sistema, la versión del launcher y el registro relevante (el registro en vivo de la instancia tiene **Copiar**). No publiques contraseñas, tokens ni claves privadas.
+
+## Aviso
 
 Proyecto independiente de EBALIA, no afiliado a Mojang ni Microsoft. Las cuentas y licencias de Minecraft no se incluyen.

@@ -1,16 +1,16 @@
-# EBALIA Launcher 1.1.0
+# EBALIA Launcher 1.2.0
 
-[Descargar](https://ebalia.gitgud.site/#descargas) · [Novedades de 1.1.0](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
+[Descargar](https://ebalia.gitgud.site/#descargas) · [Novedades de 1.2.0](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
 
 Reconstrucción nativa en C++20 / Qt 6. Barra lateral con ilustraciones de colores propias y la cuenta arriba, como el Minecraft Launcher; los controles usan iconos [Lucide](https://lucide.dev) (licencia ISC). **Inicio** tiene fondos que cambian automáticamente, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes completas. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
 
-El carrusel de Inicio alterna cuatro fondos cada nueve segundos, con transición, flechas, indicadores y pausa persistente. Deja de rotar al cambiar de página. Cada una de las 15 versiones perdidas tiene una portada distinta, asignada por su identificador. Las 19 imágenes se incluyen localmente para funcionar sin conexión; proceden de los [fondos oficiales de Minecraft](https://www.minecraft.net/en-us/collectibles), con las fuentes de cada archivo en `resources/art/backgrounds/sources.json`. Las portadas del archivo son ilustrativas, no capturas históricas de esos paquetes. Los proveedores de modpacks usan sus logos, con créditos en `resources/icons/providers`.
+El carrusel de Inicio alterna cuatro fondos cada nueve segundos, con transición, flechas, indicadores y pausa persistente. Deja de rotar al cambiar de página. Las 19 imágenes de fondo se incluyen localmente para funcionar sin conexión; proceden de los [fondos oficiales de Minecraft](https://www.minecraft.net/en-us/collectibles), con las fuentes de cada archivo en `resources/art/backgrounds/sources.json`. Las 15 versiones perdidas muestran capturas tomadas en cada una (`resources/lost/<id>/<n>.jpg`, 1280 × 720); el fondo ilustrativo solo se usa si una versión no tiene capturas. Los proveedores de modpacks usan sus logos, con créditos en `resources/icons/providers`.
 
 La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lateral conserva los iconos y sus ayudas, Jugar pasa a otra fila y los paneles se apilan. En ventanas bajas se desplaza el contenido para conservar el tamaño y la separación de los controles. El creador de instancias mantiene sus botones de confirmación fuera del área desplazable.
 
 ## Incluido
 
-- Cliente Java, archivo de versiones perdidas de EBALIA e integración experimental con gestores externos de Bedrock.
+- Cliente Java, archivo de versiones perdidas de EBALIA e integración experimental con Bedrock (Minecraft para Windows; Minecraft Linux en Linux y macOS).
 - Instancias con directorios UUID independientes, aunque compartan nombre y versión. Mundos, mods, opciones, Java y memoria separados.
 - Catálogo oficial de Minecraft al iniciar y cada 30 minutos; copia local ante fallos de conexión. Snapshots y versiones antiguas son opcionales.
 - Vanilla, Fabric, Quilt, Forge y NeoForge. Versiones del cargador consultables; selección automática o explícita. Forge/NeoForge ejecutan sus instaladores oficiales completos, incluidos los procesadores, en vez de limitarse a mezclar JSON.
@@ -26,7 +26,7 @@ La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lat
 - **Nueva instancia** con el esquema de Prism Launcher: nombre, grupo e ícono arriba; a la izquierda Personalizado, Importar, ATLauncher, CurseForge, FTB, FTB Legacy, Importar app de FTB, Modrinth y Technic. Cada proveedor se busca dentro de la misma ventana (ícono, descripción y versión; se preselecciona la última estable). El nombre se completa solo con la versión o el nombre del pack.
 - **Importar** acepta archivo, carpeta o enlace https, también arrastrándolo a la ventana: Modrinth (.mrpack), CurseForge (.zip), exportaciones o carpetas de Prism Launcher / PolyMC / MultiMC, Technic y ATLauncher (.zip), carpetas de la app de CurseForge y de FTB, exportaciones de EBALIA y packs de EBALIA (.json). Lista las instancias de Prism, PolyMC, MultiMC, CurseForge y la app de FTB que ya existen en el equipo. Las instancias con LiteLoader o mods dentro de minecraft.jar se rechazan con una explicación.
 - **Java automático**: se buscan Java en PATH, JAVA_HOME, el registro de Windows (Oracle, Temurin/Adoptium, Microsoft, Zulu, Liberica, Corretto, Semeru), Program Files, los runtimes del Minecraft Launcher (incluida la versión de Microsoft Store), CurseForge, FTB App, Technic, ATLauncher, Modrinth App, GDLauncher, Prism/PolyMC/MultiMC (y las Java configuradas en ellos), Gradle, IntelliJ, SDKMAN, asdf, mise, scoop, /usr/lib/jvm, /opt y Nix. Se usa la versión exacta que pide Minecraft o la más cercana más nueva cuando el juego ya requiere Java 16+. Si no hay ninguna, se descarga la Java oficial de Mojang que indica la versión (con verificación SHA-1), igual que el Minecraft Launcher.
-- Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz principal incluida localmente; la guía interactiva nueva usa español o inglés; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
+- Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz principal incluida localmente; la guía interactiva también está en los diez idiomas; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
 
 ## Ejecutar en NixOS / Linux de este equipo
 
@@ -58,9 +58,11 @@ Fuera del paquete Nix no hace falta instalar Java a mano: si no se detecta una c
 
 ## Versiones perdidas
 
-Los paquetes del archivo son `.bat`/`.exe` originales que llaman a `java` con las bibliotecas nativas de Windows. Al pulsar Jugar, EBALIA usa una Java 8 detectada o instala la `jre-legacy` oficial de Mojang. En Linux y macOS se ejecutan en Wine con un prefijo propio (`<datos>/wine`, o `EBALIA_WINEPREFIX`), con la Java 8 de Windows en `WINEPATH`; no se toca tu configuración de Wine. Detener una versión cierra ese prefijo. Se probó Alpha 1.2.7 hasta su pantalla de título en Wine.
+Cada versión del catálogo (`resources/versions.json`) tiene una descripción nativa (`native`, ver `include/LostNative.hpp`): EBALIA la inicia con Java 8 directamente, igual en Windows, macOS y Linux, con las LWJGL 2 oficiales de Mojang para cada sistema, sin Wine. Al pulsar Jugar usa una Java 8 detectada o instala la `jre-legacy` oficial de Mojang (en NixOS, la Java 8 del paquete Nix). Cada versión guarda sus opciones y mundos dentro de su carpeta (`.ebalia/home`). Las 15 versiones se probaron hasta entrar a un mundo.
 
-**Preparación y diagnóstico** lista las Java detectadas, comprueba Java 8 (o Wine y la Java 8 de Windows), OpenGL y OpenAL, permite instalar la Java 8 oficial con un clic y volver a comprobar todo. Estos paquetes necesitan OpenAL para el sonido: en Windows se verifica `OpenAL32.dll` en el sistema; abrir el instalador no cuenta como instalado hasta que la comprobación lo encuentra.
+Algunos paquetes se archivaron junto con el launcher que los ejecutaba (UltimMC, BetaCraft) y otras versiones: la instalación extrae solo la carpeta del juego y los jars de su classpath (`LostNative::needed`), y las instalaciones anteriores se ordenan en su siguiente inicio, conservando mundos, opciones y registro. Las correcciones de clases van en `resources/lost/patches` (por ejemplo, la pantalla de crear mundo de Minecraft 1.Li02, generada con `scripts/lost-patches/Li02CreateWorld.java`): se ponen primeras en el classpath (`@patch/<archivo>`) sin modificar los archivos instalados. Los datos de cada ficha (descripción, versión que muestra el juego, origen, autor, tamaño y cantidad de capturas) también están en `versions.json`.
+
+**Preparación y diagnóstico** lista las Java detectadas, comprueba Java 8 (o Wine y la Java 8 de Windows, para un paquete sin descripción nativa), OpenGL y OpenAL, permite instalar la Java 8 oficial con un clic y volver a comprobar todo. Estos paquetes necesitan OpenAL para el sonido: en Windows se verifica `OpenAL32.dll` en el sistema; abrir el instalador no cuenta como instalado hasta que la comprobación lo encuentra.
 
 ## Jugar
 
@@ -107,7 +109,7 @@ Se conserva la ubicación anterior `QStandardPaths::AppDataLocation` de `EBALIA 
 
 Una instancia del motor anterior necesita **Reparar instalación** una vez para generar su `launch-profile.json`. Los mundos y mods no se borran. Las versiones perdidas requieren volver a instalarse una vez para crear su marcador de instalación; la carpeta previa se conserva como `.backup-<fecha>`.
 
-La extracción de ZIP rechaza rutas que salen del destino y enlaces simbólicos. Los paquetes del archivo de EBALIA conservan su comando original; los `.exe`/`.bat` necesitan Windows o Wine. No todos los paquetes históricos o enlaces originales están necesariamente disponibles. El catálogo histórico permanece incorporado; la consulta automática de versiones nuevas corresponde al catálogo oficial de Minecraft.
+La extracción de ZIP rechaza rutas que salen del destino y enlaces simbólicos. Las versiones del archivo de EBALIA se inician con Java 8 desde su descripción nativa; solo un paquete sin ella usaría su comando original (`.exe`/`.bat`, con Windows o Wine). No todos los paquetes históricos o enlaces originales están necesariamente disponibles. El catálogo histórico permanece incorporado; la consulta automática de versiones nuevas corresponde al catálogo oficial de Minecraft.
 
 Forge antiguo puede usar un instalador sin modo de cliente por consola; esos instaladores muestran un error y su registro, no una instalación falsamente exitosa. La compatibilidad de un mod se determina por los metadatos publicados en Modrinth, no garantiza que cualquier combinación funcione en el juego. No se distribuyen archivos de mods dentro del JSON de un pack, ni configuraciones o mundos.
 
@@ -128,7 +130,7 @@ Otras comprobaciones manuales:
 ```sh
 ./build/ebalia-launcher --javatest                 # Java detectadas
 ./build/ebalia-launcher --javadownload 21          # instala la Java oficial de Mojang
-./build/ebalia-launcher --lost-launchtest alpha_1.2.7   # Java 8 + Wine/Windows, 40 s de juego
+./build/ebalia-launcher --lost-launchtest alpha_1.2.7   # Java 8, 40 s de juego
 EBALIA_TEST_ARTIFACTS=/tmp/shots QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tests screenshots
 EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModpackInstall livePackCatalogs
 ```
@@ -187,6 +189,6 @@ Desde 1.1.0, **Actualizar y reiniciar** usa los paquetes de la release y `SHA256
 
 `packaging/write-update-manifest.py` registra los archivos que pertenecen al programa. El reemplazo no elimina archivos ajenos a ese manifiesto. La prueba de actualización cubre archivos de usuario conservados, rechazo de checksums ausentes, limpieza y restauración tras una verificación fallida. NixOS prepara una derivación nueva y conserva un enlace raíz de Nix; no elimina rutas del almacén que estén referenciadas por otras instalaciones.
 
-El instalador NSIS guarda `InstallLocation` en el registro del usuario y reconoce el `UninstallString` de instaladores anteriores para recuperar su carpeta. No cambia la identidad de datos `EBALIA / EBALIA Launcher` ni borra instancias o Lost Versions. Quienes usan 1.0.0 deben instalar 1.1.0 una vez para incorporar el actualizador.
+El instalador NSIS guarda `InstallLocation` en el registro del usuario y reconoce el `UninstallString` de instaladores anteriores para recuperar su carpeta. No cambia la identidad de datos `EBALIA / EBALIA Launcher` ni borra instancias o Lost Versions. Quienes usan 1.0.0 deben instalar una versión 1.1.0 o posterior una vez para incorporar el actualizador.
 
 La guía interactiva se abre si `ui/tutorialSeen` no está marcado. Completarla u omitirla guarda esa preferencia. **Guía y tutorial → Iniciar guía interactiva** permite repetir sus 14 pasos. El recorrido se prueba a 640 × 480 y no realiza instalaciones ni modifica cuentas.
