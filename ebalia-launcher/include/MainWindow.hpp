@@ -1,0 +1,170 @@
+#pragma once
+#include <QMainWindow>
+#include <QJsonArray>
+#include <QHash>
+#include <QSet>
+#include <QCache>
+#include <QTimer>
+#include <QElapsedTimer>
+#include <QPixmap>
+#include <functional>
+#include "McInstanceManager.hpp"
+class QListWidget;
+class QLabel;
+class QComboBox;
+class QLineEdit;
+class QStackedWidget;
+class QProgressBar;
+class VersionManager;
+class AccountManager;
+class JavaRunner;
+class QCloseEvent;
+class QPushButton;
+class QToolButton;
+class QHBoxLayout;
+class QGridLayout;
+class QTextBrowser;
+class QVBoxLayout;
+class QNetworkAccessManager;class QThread;
+class PatreonAuth;
+class InstanceGrid;
+class InstanceDetail;
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+public:
+    // Sidebar order, like the Minecraft Launcher: sections on top, Settings at the bottom.
+    enum Page{Home,Instances,Explore,Lost,Packs,Skins,News,Community,Guide,Bedrock,Changelog,Settings};
+    explicit MainWindow(QWidget *parent=nullptr);
+    ~MainWindow() override;
+    void showPage(int index);
+    bool canUpdate() const;
+    void startTour();
+    // Opens the mods window of an instance.
+    Q_INVOKABLE void openMods(const QString &dir){m_selectedDir=dir;manageMods();}
+    Q_INVOKABLE void openContent(const QString &dir,const QString &folder){m_selectedDir=dir;manageContent(folder);}
+    // Launcher updates: the sidebar shows "Update to <version>" only while one is available.
+    enum class LauncherUpdate{Unknown,Checking,Current,Available,Installing,Failed};
+    void setLauncherUpdate(LauncherUpdate state,const QString &version={});
+signals:
+    void installLauncherUpdateRequested();
+protected:
+    void closeEvent(QCloseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
+private:
+    void adaptSidebar();
+    void build();
+    LauncherUpdate m_launcherUpdate=LauncherUpdate::Unknown;QString m_launcherVersion;
+    QTimer *m_pasteTimer=nullptr;QString m_pasteSnapshot;QSet<QString> m_pasteFailed;
+    QWidget *buildSidebar();
+    QWidget *buildHome();
+    void openCreatorDialog(bool patreonOnly);
+    QWidget *buildInstances();
+    QWidget *buildExplore();
+    QWidget *buildChangelog();
+    // The changes of the version chosen in the changelog, with what the search finds marked.
+    void showChange();
+    void filterChanges();
+    QWidget *buildLost();
+    QWidget *buildPacks();
+    QWidget *buildSkins();
+    QWidget *buildNews();
+    QWidget *buildCommunity();
+    QWidget *buildGuide();
+    QWidget *buildSettings();
+    void refreshInstances();
+    void refreshPacks();
+    void refreshAccounts();
+    void refreshLost();
+    void fillHomeMods();
+    void refreshCreatorMods(bool network=true);
+    void refreshNews(bool network=true);
+    // Downloads a picture once (disk and memory cache) and makes it at most maxWidth pixels wide.
+    // urgent: ahead of the other pictures waiting to download (the one the person is looking at).
+    void loadImage(const QString &url,std::function<void(const QPixmap &)> done,int maxWidth=640,bool urgent=false);
+    void accountMenu();
+    void instancePickerMenu();
+    void selection();
+    McInstance selected() const;
+    void setInstanceIcon(const QString &dir,const QString &key,const QImage &custom);
+    void changeBackground(const QString &dir);
+    void showCrash(const QString &dir);
+    void adoptPastedInstances();
+    void showImportWarnings(const QString &dir);
+    void useSoftwareRendering(const QString &dir);
+    void installDependency(const QString &dir,const QString &mod,std::function<void(bool)> done);
+    void createInstance(bool copy=false,int page=0);
+    void instanceMenu();
+    void groupMenu(const QString &group);
+    void changeGroup();
+    void copyInstance();
+    void exportInstance();
+    // The game's log in its own window, live while the game runs; one window per game.
+    void showLog(const QString &dir,const QString &title,std::function<bool()> running);
+    void play();
+    void launchInstance(const McInstance &instance);
+    void editInstance();
+    void removeInstance();
+    void uninstallLauncher();
+    void manageMods();
+    // Resource packs, shader packs or worlds of the selected instance: list, folder, add, remove, turn on or off.
+    void manageContent(const QString &folder);
+    void savePack();
+    void applyPack();
+    void preview(QJsonArray projects,QString dir);
+    void searchMods(int offset=0);
+    void installModNow(const QJsonObject &project);
+    // Installs the chosen projects of the Discover kind: mods with their dependencies, or resource / shader packs.
+    void installProjects(const QJsonArray &projects,QString kind={});
+    // Discover: the results the target instance already has say "Installed", and Install leaves them out.
+    void markInstalled();
+    void showInstalled(const QSet<QString> &projects);
+    void updateInstallButton();
+    // Account pictures: the head of the skin each account wears (Microsoft) or gets by default (no premium).
+    // Once per account and session unless force.
+    void refreshAvatars(bool force=false);
+    // Discover opened on a kind of project ("mod", "resourcepack", "shader") for an instance.
+    void discover(const QString &kind,const QString &dir={});
+    void account(bool microsoft);
+    void lostAction(bool launch);
+    void lostSelection();
+    static QString lostCategory(const QString &category);
+    void work(const QString &label,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done);
+    // The same, for a job that knows how far it got (a download): report(done,total), from the job's thread, fills the
+    // bar and shows the percentage and the size.
+    using Report=std::function<void(qint64 done,qint64 total)>;
+    void measuredWork(const QString &label,std::function<QJsonObject(const Report &report)> job,std::function<void(QJsonObject)> done);
+    void error(const QString &message);
+    QString m_root;
+    PatreonAuth *m_patreon;
+    McInstanceManager *m_mc;
+    VersionManager *m_versions;
+    AccountManager *m_accounts;
+    JavaRunner *m_java;
+    QThread *m_pictures=nullptr;QObject *m_picturesWorker=nullptr; // pictures load on their own thread (loadImage)
+    // Downloaded pictures by address and width, up to about 160 MB: full-size gallery pictures are large.
+    QCache<QString,QPixmap> m_imageCache{24*1024}; // KB of decoded pictures from the network
+    QList<McVersion> m_manifest;
+    QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr,*m_accountList=nullptr;
+    QStackedWidget *m_pages=nullptr;
+    QPushButton *m_navSettings=nullptr,*m_sidebarUpdate=nullptr,*m_accountButton=nullptr,*m_instancePicker=nullptr;
+    QLabel *m_accountName=nullptr,*m_accountType=nullptr,*m_accountAvatar=nullptr;
+    QLabel *m_playerAvatar=nullptr;
+    QLabel *m_pickerIcon=nullptr,*m_pickerName=nullptr,*m_pickerSub=nullptr,*m_playerName=nullptr,*m_playerType=nullptr;
+    QLabel *m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
+    QProgressBar *m_progress=nullptr;
+    QSet<QString> m_avatarsDone;
+    QComboBox *m_target=nullptr,*m_modProvider=nullptr,*m_modKind=nullptr;QPushButton *m_installButton=nullptr;
+    QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
+    QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
+    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;QToolButton *m_lostLog=nullptr;
+    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr,*m_lostAbout=nullptr;QWidget *m_lostImage=nullptr;QListWidget *m_lostShots=nullptr;QGridLayout *m_lostFacts=nullptr;
+    void openLostScreenshots(int start);
+    QListWidget *m_changes=nullptr;QTextBrowser *m_changeNotes=nullptr;QLabel *m_changeTitle=nullptr,*m_changeMeta=nullptr,*m_changeEnglish=nullptr;QLineEdit *m_changeFilter=nullptr;
+    QHBoxLayout *m_homeNews=nullptr,*m_homeMods=nullptr;
+    QJsonArray m_packData,m_hits;
+    QSet<QString> m_installing,m_launchAfterInstall;
+    int m_jobs=0,m_offset=0,m_searchSerial=0;QTimer *m_searchTimer=nullptr;
+    QElapsedTimer m_typed; // the last key typed in Discover's search
+    bool typing() const {return (m_searchTimer&&m_searchTimer->isActive())||(m_typed.isValid()&&m_typed.elapsed()<900);} // the heavy part of a mod's page waits for it
+};

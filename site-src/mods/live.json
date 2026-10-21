@@ -1,0 +1,168 @@
+{
+ "format": 1,
+ "updated": "2026-10-18T21:19:31Z",
+ "downloads": 6990304,
+ "published": 8,
+ "mods": [
+  {
+   "id": "in-your-world",
+   "group": "own",
+   "name": "In Your World",
+   "soon": false,
+   "text": "modInYourWorld",
+   "summary": "Something in your world....something is wrong...",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/1059/6/256/256/638590186757729232.png",
+   "released": "2024-08-12",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/in-your-world",
+    "downloads": 1784171
+   },
+   "modrinth": {
+    "url": "https://modrinth.com/mod/in-your-world",
+    "downloads": 167850
+   },
+   "downloads": 1952021
+  },
+  {
+   "id": "ooo-jar",
+   "group": "own",
+   "name": "ooo.jar · 000.jar",
+   "soon": false,
+   "text": "modOoo",
+   "summary": "you are in a Minecraft Arg",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/1105/911/256/256/638655651054127554.png",
+   "released": "2024-10-26",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar",
+    "downloads": 1422132
+   },
+   "modrinth": {
+    "url": "https://modrinth.com/mod/000.jar",
+    "downloads": 239575
+   },
+   "downloads": 1661707
+  },
+  {
+   "id": "secret-01-proyect",
+   "group": "own",
+   "name": "Secret 01",
+   "soon": true,
+   "text": "modSecret",
+   "downloads": 0
+  },
+  {
+   "id": "disturbed",
+   "group": "collab",
+   "name": "DISTURBED",
+   "soon": false,
+   "text": "modDisturbed",
+   "credit": [
+    "collabWith",
+    "LUNAR_CORE · VantablackDEV · ClouddyVR · monty14zx"
+   ],
+   "summary": "Adds a black humanoid entity into your game.",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/1449/647/256/256/638940485151077515_animated.gif",
+   "released": "2025-11-14",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/disturbed",
+    "downloads": 3282418
+   },
+   "downloads": 3282418
+  },
+  {
+   "id": "backrooms-no-exit",
+   "group": "collab",
+   "name": "Backrooms: No Exit",
+   "soon": false,
+   "text": "modBackrooms",
+   "credit": [
+    "collabWith",
+    "PKFL · TingKH"
+   ],
+   "summary": "Adds VHS styled realistic backrooms to your world.",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/2103/408/256/256/639271147002208293.jpg",
+   "released": "2026-10-12",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/backrooms-no-exit",
+    "downloads": 40365
+   },
+   "downloads": 40365
+  },
+  {
+   "id": "twodoors-jar",
+   "group": "collab",
+   "name": ".2doors.jar",
+   "soon": false,
+   "text": "modTwoDoors",
+   "credit": [
+    "collabWith",
+    "PKFL · LookOut"
+   ],
+   "summary": "adds the 2 doors series from LookOut3D's to your world",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/2053/994/256/256/639253000234998623.jpg",
+   "released": "2026-10-01",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/twodoors-jar",
+    "downloads": 29951
+   },
+   "downloads": 29951
+  },
+  {
+   "id": "salvation-archives-lobotomy-remake",
+   "group": "collab",
+   "name": "Salvation Archives: Lobotomy Remake",
+   "soon": false,
+   "text": "modSalvation",
+   "credit": [
+    "remakeBy",
+    "FLYover67"
+   ],
+   "summary": "A remake of the mod that adds a lot of different sounds. Screen effects, events, entities, and... the lobotomy itself",
+   "icon": "https://cdn.modrinth.com/data/vp1KbjMu/547a62d001f8c7ffeaeb6b506c620d9b5d3809c7_96.webp",
+   "released": "2026-02-14",
+   "modrinth": {
+    "url": "https://modrinth.com/mod/salvation-archives-lobotomy-remake",
+    "downloads": 18087
+   },
+   "downloads": 18087
+  },
+  {
+   "id": "the-world-is-alive",
+   "group": "collab",
+   "name": "My World is Alive",
+   "soon": false,
+   "text": "modAlive",
+   "credit": [
+    "collabWith",
+    "PKFL"
+   ],
+   "summary": "your world is alive and conscious..",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/2078/541/256/256/639262534692043080.jpg",
+   "released": "2026-10-03",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/the-world-is-alive",
+    "downloads": 5548
+   },
+   "downloads": 5548
+  },
+  {
+   "id": "neighbor-jar",
+   "group": "collab",
+   "name": "Neighbor.jar",
+   "soon": false,
+   "text": "modNeighbor",
+   "credit": [
+    "collabWith",
+    "PKFL · TingKH"
+   ],
+   "summary": "Adds Gerald, a neighbor that will visit you in your world.",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/2114/925/256/256/639274708805813005.png",
+   "released": "2026-10-18",
+   "curseforge": {
+    "url": "https://www.curseforge.com/minecraft/mc-mods/neighbor-jar",
+    "downloads": 207
+   },
+   "downloads": 207
+  }
+ ]
+}

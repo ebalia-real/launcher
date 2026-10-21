@@ -1,0 +1,114 @@
+{
+  "about": "EBALIA's mods for the site and the launcher. site-src/live.py adds what CurseForge and Modrinth say now (downloads, name, picture) and finds new mods by EBALIA. name is shown while the store keeps storeName; a store that renames the mod shows its new name.",
+  "curseforgeAuthor": 108138278,
+  "modrinthUser": "7ovHijLV",
+  "mods": [
+    {
+      "id": "in-your-world",
+      "group": "own",
+      "name": "In Your World",
+      "storeName": "In Your World",
+      "text": "modInYourWorld",
+      "curseforge": "in-your-world",
+      "modrinth": "in-your-world",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/1059/6/256/256/638590186757729232.png"
+    },
+    {
+      "id": "ooo-jar",
+      "group": "own",
+      "name": "ooo.jar · 000.jar",
+      "storeName": "ooo.jar",
+      "text": "modOoo",
+      "curseforge": "ooo-jar",
+      "modrinth": "000.jar",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/1105/911/256/256/638655651054127554.png"
+    },
+    {
+      "id": "secret-01-proyect",
+      "group": "own",
+      "name": "Secret 01",
+      "text": "modSecret",
+      "curseforge": "secret-01-proyect",
+      "match": "secret01",
+      "soon": true
+    },
+    {
+      "id": "disturbed",
+      "group": "collab",
+      "name": "DISTURBED",
+      "storeName": "DISTURBED (HORROR)",
+      "text": "modDisturbed",
+      "credit": [
+        "collabWith",
+        "LUNAR_CORE · VantablackDEV · ClouddyVR · monty14zx"
+      ],
+      "curseforge": "disturbed",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/1449/647/256/256/638940485151077515_animated.gif"
+    },
+    {
+      "id": "backrooms-no-exit",
+      "group": "collab",
+      "name": "Backrooms: No Exit",
+      "storeName": "Backrooms: No Exit",
+      "text": "modBackrooms",
+      "credit": [
+        "collabWith",
+        "PKFL · TingKH"
+      ],
+      "curseforge": "backrooms-no-exit",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/2103/408/256/256/639271147002208293.jpg"
+    },
+    {
+      "id": "twodoors-jar",
+      "group": "collab",
+      "name": ".2doors.jar",
+      "storeName": ".2doors.jar",
+      "text": "modTwoDoors",
+      "credit": [
+        "collabWith",
+        "PKFL · LookOut"
+      ],
+      "curseforge": "twodoors-jar",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/2053/994/256/256/639253000234998623.jpg"
+    },
+    {
+      "id": "salvation-archives-lobotomy-remake",
+      "group": "collab",
+      "name": "Salvation Archives: Lobotomy Remake",
+      "storeName": "Salvation archives: Lobotomy REMAKE",
+      "text": "modSalvation",
+      "credit": [
+        "remakeBy",
+        "FLYover67"
+      ],
+      "modrinth": "salvation-archives-lobotomy-remake",
+      "pictureFrom": "https://cdn.modrinth.com/data/vp1KbjMu/547a62d001f8c7ffeaeb6b506c620d9b5d3809c7_96.webp"
+    },
+    {
+      "id": "the-world-is-alive",
+      "group": "collab",
+      "name": "My World is Alive",
+      "storeName": "My World is Alive",
+      "text": "modAlive",
+      "credit": [
+        "collabWith",
+        "PKFL"
+      ],
+      "curseforge": "the-world-is-alive",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/2078/541/256/256/639262534692043080.jpg"
+    },
+    {
+      "id": "neighbor-jar",
+      "group": "collab",
+      "name": "Neighbor.jar",
+      "storeName": "Neighbor.jar",
+      "text": "modNeighbor",
+      "credit": [
+        "collabWith",
+        "PKFL · TingKH"
+      ],
+      "curseforge": "neighbor-jar",
+      "pictureFrom": "https://media.forgecdn.net/avatars/thumbnails/2114/925/256/256/639274708805813005.png"
+    }
+  ]
+}

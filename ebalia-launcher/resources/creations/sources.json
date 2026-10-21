@@ -1,0 +1,74 @@
+[
+  {
+    "slug": "ooo-jar",
+    "name": "ooo.jar",
+    "projectId": 1128697,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar",
+    "icon": "https://media.forgecdn.net/avatars/1105/911/638655651054127554.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "in-your-world",
+    "name": "In Your World",
+    "projectId": 1082195,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/in-your-world",
+    "icon": "https://media.forgecdn.net/avatars/1059/6/638590186757729232.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "secret-01-proyect",
+    "name": "secret-test",
+    "projectId": 981369,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/secret-01-proyect",
+    "icon": "https://media.forgecdn.net/avatars/1633/763/639046533087280348.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "neighbor-jar",
+    "name": "Neighbor.jar",
+    "projectId": 1742581,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/neighbor-jar",
+    "icon": "https://media.forgecdn.net/avatars/2114/925/639274708805813005.png",
+    "credit": "PKFL \u00b7 TingKH \u00b7 EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "the-world-is-alive",
+    "name": "My World is Alive",
+    "projectId": 1717356,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/the-world-is-alive",
+    "icon": "https://media.forgecdn.net/avatars/2078/541/639262534692043080.jpg",
+    "credit": "PKFL \u00b7 EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "backrooms-no-exit",
+    "name": "Backrooms: No Exit",
+    "projectId": 1559050,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/backrooms-no-exit",
+    "icon": "https://media.forgecdn.net/avatars/2103/408/639271147002208293.jpg",
+    "credit": "PKFL \u00b7 TingKH \u00b7 EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "twodoors-jar",
+    "name": ".2doors.jar",
+    "projectId": 1686623,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/twodoors-jar",
+    "icon": "https://media.forgecdn.net/avatars/2053/994/639253000234998623.jpg",
+    "credit": "PKFL \u00b7 LookOut \u00b7 EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "disturbed",
+    "name": "DISTURBED (HORROR)",
+    "projectId": 1248540,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/disturbed",
+    "icon": "https://media.forgecdn.net/avatars/1449/647/638940485151077515.gif",
+    "credit": "LUNAR_CORE \u00b7 EBALIA \u00b7 VantablackDEV \u00b7 ClouddyVR \u00b7 monty14zx \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "salvation-archives-lobotomy-remake",
+    "name": "Salvation archives: Lobotomy REMAKE",
+    "projectId": "vp1KbjMu",
+    "page": "https://modrinth.com/mod/salvation-archives-lobotomy-remake",
+    "icon": "https://cdn.modrinth.com/data/vp1KbjMu/547a62d001f8c7ffeaeb6b506c620d9b5d3809c7_96.webp",
+    "credit": "FLYover67 \u00b7 EBALIA \u00b7 Modrinth project icon"
+  }
+]

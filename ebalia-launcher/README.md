@@ -1,0 +1,200 @@
+# EBALIA Launcher 1.2.3
+
+[Descargar](https://ebalia.gitgud.site/#descargas) · [Novedades de 1.2.3](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
+
+Reconstrucción nativa en C++20 / Qt 6. Barra lateral con la cuenta arriba, como el Minecraft Launcher, e íconos en pixel art al estilo del juego (`scripts/navigation_icons.py` los dibuja; el pico es el de Minetest Game, CC BY-SA 3.0); los controles usan iconos [Lucide](https://lucide.dev) (licencia ISC). **Inicio** tiene fondos que cambian automáticamente, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes completas. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
+
+El carrusel de Inicio alterna cuatro fondos cada nueve segundos, con transición, flechas, indicadores y pausa persistente. Deja de rotar al cambiar de página. Las 19 imágenes de fondo se incluyen localmente para funcionar sin conexión; proceden de los [fondos oficiales de Minecraft](https://www.minecraft.net/en-us/collectibles), con las fuentes de cada archivo en `resources/art/backgrounds/sources.json`. Las 15 versiones perdidas muestran capturas tomadas en cada una (`resources/lost/<id>/<n>.jpg`, 1280 × 720); el fondo ilustrativo solo se usa si una versión no tiene capturas. Los proveedores de modpacks usan sus logos, con créditos en `resources/icons/providers`.
+
+La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lateral conserva los iconos y sus ayudas, Jugar pasa a otra fila y los paneles se apilan. En ventanas bajas se desplaza el contenido para conservar el tamaño y la separación de los controles. El creador de instancias mantiene sus botones de confirmación fuera del área desplazable.
+
+## Incluido
+
+- Cliente Java, archivo de versiones perdidas de EBALIA e integración experimental con Bedrock (Minecraft para Windows; Minecraft Linux en Linux y macOS).
+- Instancias con directorios UUID independientes, aunque compartan nombre y versión. Mundos, mods, opciones, Java y memoria separados.
+- Catálogo oficial de Minecraft al iniciar y cada 30 minutos; copia local ante fallos de conexión. Snapshots y versiones antiguas son opcionales.
+- Vanilla, Fabric, Quilt, Forge y NeoForge. Versiones del cargador consultables; selección automática o explícita. Forge/NeoForge ejecutan sus instaladores oficiales completos, incluidos los procesadores, en vez de limitarse a mezclar JSON.
+- Noticias oficiales de Minecraft con copia local y enlaces a Minecraft.net. Los artículos conservan el idioma publicado por Mojang.
+- Búsqueda Modrinth filtrada por Minecraft/cargador, resolución de dependencias obligatorias y vista previa. Archivos verificados con SHA-512 y descargas preparadas antes de modificar mods instalados.
+- Packs personales guardados como referencias a proyectos: al aplicarlos se buscan ediciones compatibles con el destino. Una ausencia o dependencia contradictoria se muestra antes de instalar. Se puede elegir omitir los no disponibles.
+- Captura de mods locales mediante su hash de Modrinth. No se adivina la compatibilidad de archivos desconocidos. Los desactivados no se incluyen.
+- Exportación/importación JSON de packs, activación/desactivación, JAR locales y carpeta de mods retirados.
+- Papelera reversible de instancias, reparación del cliente y visor de registros.
+- **Instancias**: tarjetas por grupo (se pliegan, renombran o quitan), pestañas Todas / Vanilla / Con mods / Modpacks, búsqueda, botón verde Jugar y engranaje de ajustes en cada tarjeta, menú contextual y tecla Supr. La página de una instancia muestra cargador, versión, memoria y grupo, y permite jugar, abrir registro o carpeta, exportar, copiar, cambiar de grupo, buscar mods, guardar los mods como pack y eliminar.
+- **Eliminar instancia** mueve la carpeta a la papelera local con sus mundos. Si Windows bloquea la carpeta porque un programa usa un archivo, se intenta la papelera del sistema y, si tampoco se puede, se explica qué cerrar.
+- **Copiar instancia** duplica mundos, mods y ajustes en una instancia independiente. **Exportar** genera un ZIP que se vuelve a abrir con Importar.
+- **Nueva instancia** con el esquema de Prism Launcher: nombre, grupo e ícono arriba; a la izquierda Personalizado, Importar, ATLauncher, CurseForge, FTB, FTB Legacy, Importar app de FTB, Modrinth y Technic. Cada proveedor se busca dentro de la misma ventana (ícono, descripción y versión; se preselecciona la última estable). El nombre se completa solo con la versión o el nombre del pack.
+- **Importar** acepta archivo, carpeta o enlace https, también arrastrándolo a la ventana: Modrinth (.mrpack), CurseForge (.zip), exportaciones o carpetas de Prism Launcher / PolyMC / MultiMC, Technic y ATLauncher (.zip), carpetas de la app de CurseForge y de FTB, exportaciones de EBALIA y packs de EBALIA (.json). Lista las instancias de Prism, PolyMC, MultiMC, CurseForge y la app de FTB que ya existen en el equipo. Las instancias con LiteLoader o mods dentro de minecraft.jar se rechazan con una explicación.
+- **Java automático**: se buscan Java en PATH, JAVA_HOME, el registro de Windows (Oracle, Temurin/Adoptium, Microsoft, Zulu, Liberica, Corretto, Semeru), Program Files, los runtimes del Minecraft Launcher (incluida la versión de Microsoft Store), CurseForge, FTB App, Technic, ATLauncher, Modrinth App, GDLauncher, Prism/PolyMC/MultiMC (y las Java configuradas en ellos), Gradle, IntelliJ, SDKMAN, asdf, mise, scoop, /usr/lib/jvm, /opt y Nix. Se usa la versión exacta que pide Minecraft o la más cercana más nueva cuando el juego ya requiere Java 16+. Si no hay ninguna, se descarga la Java oficial de Mojang que indica la versión (con verificación SHA-1), igual que el Minecraft Launcher.
+- Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz principal incluida localmente; la guía interactiva también está en los diez idiomas; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
+
+## Ejecutar en NixOS / Linux de este equipo
+
+Desde `ebalia-launcher`:
+
+```sh
+nix build
+./result/bin/ebalia-launcher
+```
+
+El paquete Nix incorpora rutas a Java 8, 17, 21 y 25 para que el launcher elija la versión que declara Minecraft. Las instancias existentes no se actualizan automáticamente de versión; esto evita cambiar mundos o mods sin revisión.
+
+Para desarrollo, evitá que `nix develop` genere rutas de salida en un directorio con espacios: ejecutá el entorno desde `/tmp` y pasá rutas absolutas a CMake. `scripts/build-local.sh` automatiza esto.
+
+## Compilar en Windows, Linux o macOS
+
+Requisitos: CMake 3.21+, compilador C++20, Qt 6.4+ (Widgets, Network, Concurrent, Test) y libarchive.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+cmake --install build --config Release --prefix package
+```
+
+En Windows se usa MSVC y libarchive mediante vcpkg. En macOS se usa Qt/libarchive de Homebrew y `macdeployqt`. El workflow [`.github/workflows/ebalia-launcher.yml`](../.github/workflows/ebalia-launcher.yml) compila, prueba y empaqueta por separado en Ubuntu, Windows y macOS. Este workflow debe ejecutarse en un repositorio de EBALIA; su presencia no equivale a una ejecución exitosa en las tres plataformas. Las builds de CI sin credenciales de firma se identifican explícitamente como unsigned.
+
+Fuera del paquete Nix no hace falta instalar Java a mano: si no se detecta una compatible, la instancia descarga durante la instalación la Java oficial de Mojang (en `mc/java`). En Ajustes de instancia podés elegir otro ejecutable; si no es compatible, el mensaje indica qué versión tiene y cuál pide Minecraft. `EBALIA_JAVA_PATHS` permite pasar varias rutas a ejecutables, separadas con el separador de rutas de la plataforma. En NixOS no se descarga la Java genérica de Mojang (no funciona allí): se usan las del paquete Nix.
+
+## Versiones perdidas
+
+Cada versión del catálogo (`resources/versions.json`) tiene una descripción nativa (`native`, ver `include/LostNative.hpp`): EBALIA la inicia con Java 8 directamente, igual en Windows, macOS y Linux, con las LWJGL 2 oficiales de Mojang para cada sistema, sin Wine. Al pulsar Jugar usa una Java 8 detectada o instala la `jre-legacy` oficial de Mojang (en NixOS, la Java 8 del paquete Nix). Cada versión guarda sus opciones y mundos dentro de su carpeta (`.ebalia/home`). Las 15 versiones se probaron hasta entrar a un mundo.
+
+Algunos paquetes se archivaron junto con el launcher que los ejecutaba (UltimMC, BetaCraft) y otras versiones: la instalación extrae solo la carpeta del juego y los jars de su classpath (`LostNative::needed`), y las instalaciones anteriores se ordenan en su siguiente inicio, conservando mundos, opciones y registro. Las correcciones de clases van en `resources/lost/patches` (por ejemplo, la pantalla de crear mundo de Minecraft 1.Li02, generada con `scripts/lost-patches/Li02CreateWorld.java`): se ponen primeras en el classpath (`@patch/<archivo>`) sin modificar los archivos instalados. Los datos de cada ficha (descripción, versión que muestra el juego, origen, autor, tamaño y cantidad de capturas) también están en `versions.json`.
+
+**Preparación y diagnóstico** lista las Java detectadas, comprueba Java 8 (o Wine y la Java 8 de Windows, para un paquete sin descripción nativa), OpenGL y OpenAL, permite instalar la Java 8 oficial con un clic y volver a comprobar todo. Estos paquetes necesitan OpenAL para el sonido: en Windows se verifica `OpenAL32.dll` en el sistema; abrir el instalador no cuenta como instalado hasta que la comprobación lo encuentra.
+
+## Jugar
+
+Jugar instala lo que falte (cliente, cargador, Java) y abre el juego en el mismo paso. Si todavía no hay cuenta, solo se pide un nombre de jugador para un perfil local.
+
+## Cuentas Microsoft
+
+El Id. de aplicación público de EBALIA está en `microsoft-client-id.txt` (`c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb`) y se incorpora durante la compilación; `EBALIA_MS_CLIENT_ID` (variable o secreto de CI) lo reemplaza si se define. No es un secreto. El registro de Entra debe ser un cliente público para cuentas personales de Microsoft, con `http://localhost` como redirección de escritorio, y Minecraft Services debe aprobar el Id. en [aka.ms/AppRegInfo](https://aka.ms/AppRegInfo); sin esa aprobación el último paso responde HTTP 403. El botón abre el navegador de Microsoft con autorización PKCE y vuelve automáticamente al launcher, sin copiar códigos. No se guarda una contraseña Microsoft; se usan refresh tokens. En sistemas POSIX el archivo de cuentas solo tiene permisos de lectura/escritura para su propietario. No es un almacén cifrado de credenciales.
+
+Al iniciar sesión se descarga la foto de perfil de la cuenta (la imagen de jugador de Xbox de esa cuenta Microsoft) y se muestra en la barra lateral, en Inicio, en el menú de cuentas y en Ajustes. Si no se puede obtener, se usa la cara de la skin de Minecraft. Se guarda en `mc/avatars/<uuid>.png` y se borra al quitar la cuenta.
+
+El inicio de sesión con una cuenta real debe verificarse con el registro OAuth propio. Los tokens se renuevan antes de lanzar una instancia autenticada.
+
+## Modo portable
+
+Con un archivo `portable.txt` junto al launcher, todo (instancias, mundos, mods, cuentas, ajustes y Java descargada) se guarda en la carpeta `ebalia-data` de al lado, en vez de la carpeta de datos del sistema. La ubicación del marcador:
+
+| Paquete | `portable.txt` va junto a |
+| --- | --- |
+| Windows `ebalia-windows-x64-portable.zip` | `ebalia-launcher.exe` (ya incluido) |
+| Linux `ebalia-linux-x86_64-portable.tar.gz` | el archivo `.AppImage` (ya incluido) |
+| macOS `ebalia-macos-*-portable.zip` | `ebalia-launcher.app` (ya incluido) |
+| Linux `.tar.gz` clásico | `bin/` o `bin/ebalia-launcher` |
+
+Borrar `portable.txt` vuelve a la carpeta normal. Las actualizaciones dentro del launcher conservan `portable.txt` y `ebalia-data`.
+
+## Ubicación y desinstalación
+
+**Ajustes → Datos** abre la carpeta del launcher (la del programa, la del AppImage o la que contiene la `.app`; en la versión portable, la que eligió el usuario) y dice si está instalado o es portable. **Ajustes → Desinstalar** explica qué se borra y lo hace al cerrarse, con un script temporal que espera a que el launcher termine (`src/Uninstaller.cpp`): en Windows instalado ejecuta el `Uninstall.exe` del instalador en silencio; en una carpeta portable o descomprimida borra solo los archivos de `update-files.json` (más `portable.txt`), y la carpeta únicamente si queda vacía; del AppImage y de la app de macOS, solo ese archivo o esa app. Los datos (`ebalia-data` o la carpeta de datos del sistema, y los ajustes) se borran solo si se marca la casilla, y nunca una carpeta que no parezca del launcher. Las copias del sistema (Nix, paquetes) se quitan con su gestor de paquetes; ahí solo se ofrece borrar los datos.
+
+## Linux: AppImage para cualquier distribución
+
+`ebalia-linux-x86_64.AppImage` incluye Qt 6, libarchive y OpenSSL; se construye en Ubuntu 22.04, así que funciona en distribuciones x86_64 con glibc 2.35 o más reciente (Ubuntu 22.04+, Debian 12+, Fedora, Arch, openSUSE Tumbleweed, Mint 21+, etc.). CI comprueba que arranque en contenedores de Debian, Fedora, Arch y openSUSE. Se usa con `chmod +x` y doble clic; sin FUSE, ejecutalo con `APPIMAGE_EXTRACT_AND_RUN=1`. Se actualiza solo: el launcher reemplaza el archivo `.AppImage` (la carpeta debe permitir escritura). Alpine/musl y ARM requieren compilación propia; NixOS usa el flake.
+
+## Windows, firma y antivirus
+
+El ejecutable tiene icono, metadatos de versión y manifiesto `asInvoker`; no requiere administrador, no usa UPX ni un empaquetador de ejecutables. El paquete nuevo no incorpora los ejecutables auxiliares del launcher anterior.
+
+Para distribuirlo, firmá el ejecutable final con un certificado Authenticode confiable o un servicio de firma de artefactos y verificá la firma. `packaging/sign-windows.ps1` usa un certificado que ya esté en el almacén de Windows. No se incluyen claves privadas ni se inventa una firma.
+
+La firma **no garantiza** que desaparezcan los avisos de SmartScreen ni las detecciones de antivirus. Microsoft documenta que incluso un binario nuevo firmado puede mostrar advertencias mientras adquiere reputación: https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation . Un falso positivo real debe enviarse al proveedor para revisión; no se desactiva Defender ni se agregan exclusiones.
+
+macOS necesita Developer ID y notarización para distribución sin avisos habituales de Gatekeeper. `packaging/sign-macos.sh` prepara ese proceso usando una identidad y un perfil de llavero existentes.
+
+## Datos, compatibilidad y recuperación
+
+Se conserva la ubicación anterior `QStandardPaths::AppDataLocation` de `EBALIA / EBALIA Launcher`. El cliente usa `mc/instances`, comparte descargas verificadas en `mc/libraries` y `mc/assets`, y guarda los packs en `packs`. `EBALIA_DATA_DIR` permite probar todo con un directorio independiente.
+
+Una instancia del motor anterior necesita **Reparar instalación** una vez para generar su `launch-profile.json`. Los mundos y mods no se borran. Las versiones perdidas requieren volver a instalarse una vez para crear su marcador de instalación; la carpeta previa se conserva como `.backup-<fecha>`.
+
+La extracción de ZIP rechaza rutas que salen del destino y enlaces simbólicos. Las versiones del archivo de EBALIA se inician con Java 8 desde su descripción nativa; solo un paquete sin ella usaría su comando original (`.exe`/`.bat`, con Windows o Wine). No todos los paquetes históricos o enlaces originales están necesariamente disponibles. El catálogo histórico permanece incorporado; la consulta automática de versiones nuevas corresponde al catálogo oficial de Minecraft.
+
+Forge antiguo puede usar un instalador sin modo de cliente por consola; esos instaladores muestran un error y su registro, no una instalación falsamente exitosa. La compatibilidad de un mod se determina por los metadatos publicados en Modrinth, no garantiza que cualquier combinación funcione en el juego. No se distribuyen archivos de mods dentro del JSON de un pack, ni configuraciones o mundos.
+
+Las compilaciones, las credenciales y los datos privados de prueba no se guardan en el repositorio.
+
+## Verificación
+
+```sh
+QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModrinth
+EBALIA_DATA_DIR=/tmp/ebalia-install-test QT_QPA_PLATFORM=offscreen ./build/ebalia-launcher --installtest 1.20.1 fabric
+```
+
+La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. Las pruebas de UI recorren las páginas del launcher en los diez idiomas y crean dos instancias homónimas mediante los controles reales. También verifican el carrusel, su pausa, las 15 imágenes distintas y la disposición de las páginas entre 640×480 y 1920×1080.
+
+Otras comprobaciones manuales:
+
+```sh
+./build/ebalia-launcher --javatest                 # Java detectadas
+./build/ebalia-launcher --javadownload 21          # instala la Java oficial de Mojang
+./build/ebalia-launcher --lost-launchtest alpha_1.2.7   # Java 8, 40 s de juego
+EBALIA_TEST_ARTIFACTS=/tmp/shots QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tests screenshots
+EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModpackInstall livePackCatalogs
+```
+
+`EBALIA_TEST_ARTIFACTS` guarda capturas de inicio y guía por idioma. `EBALIA_NO_NETWORK=1` evita consultas de inicio durante pruebas de UI. `--selftest <0..10>` guarda una captura y cierra; `EBALIA_SCREENSHOT` define su destino.
+
+Fuentes de integración: [Modrinth API](https://docs.modrinth.com/api/), [Fabric Meta](https://meta.fabricmc.net/), [instalador oficial de Forge](https://github.com/MinecraftForge/Installer).
+
+## Skins
+
+En el modo cliente, la pestaña **Skins** permite importar PNG de 64×64 o 64×32, elegir modelo Classic/Slim y ver el frente o la espalda. Aplicar a Microsoft renueva la sesión y sube el archivo al servicio oficial; se debe verificar con una cuenta real cuando esté configurado el OAuth de EBALIA.
+
+**Aplicar localmente** genera un resource pack por instancia, sin instalar un mod adicional. Necesita PNG de 64×64 y una versión del juego que publique su formato de recursos y sus texturas predeterminadas. El formato se lee del cliente instalado, no de una tabla fija. Se generan texturas para brazos clásicos y finos. Esta opción cambia la apariencia de las skins predeterminadas en ese cliente, por lo que puede afectar a otros jugadores con skin predeterminada; no publica la skin para otros usuarios ni cambia el modelo que el juego asigna al UUID. El botón Restaurar apariencia local desactiva ese pack conservando los demás packs y ajustes.
+
+## CurseForge y Modrinth
+
+En **Explorar mods**, elegí Modrinth o CurseForge y seleccioná uno o varios resultados. Ambos proveedores usan el mismo flujo de revisión, dependencias y archivos verificados. Los packs pueden conservar referencias de los dos orígenes y recordar los mods que este launcher instaló.
+
+CurseForge exige una clave de API para aplicaciones externas. Podés configurar tu clave en `curseforge-api-key.txt`. Ese archivo está excluido de Git y CMake lo incorpora al compilar, también en el paquete Nix. Para cambiarla, reemplazá el archivo junto a `CMakeLists.txt` y volvé a configurar y compilar, o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
+
+El adaptador de CurseForge se prueba con respuestas controladas, dependencias y archivos SHA-1 (el registro local conserva además SHA-512). Las pruebas de red usan la clave configurada: buscan y descargan JEI para Forge 1.20.1, verifican su SHA-1 y consultan modpacks y versiones. La prueba de interfaz busca un modpack de CurseForge y comprueba que se pueda seleccionar una versión y crear la instancia. [Documentación oficial de CurseForge](https://docs.curseforge.com/rest-api/).
+
+```sh
+EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveCurseForge
+EBALIA_LIVE_TESTS=1 EBALIA_TEST_ARTIFACTS=./artifacts QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tests liveCurseForgeBrowser
+```
+
+## Mis Mods y noticias de Patreon
+
+Inicio muestra los mods propios de EBALIA (`ooo.jar`, `In Your World` y `Secret 01` mientras no salga) y abre **EBALIA Mods**, una ventana con los propios y las colaboraciones por separado, como la página (un mod de EBALIA con otros autores es una colaboración, con su crédito), y una invitación a Patreon que puede cerrarse o desactivarse. La invitación automática aparece una sola vez, cuando Inicio está activo; siempre se puede abrir desde su botón.
+
+Los nombres, portadas, descargas y enlaces de esos mods (las tarjetas de Inicio y la ventana) salen de `https://raw.githubusercontent.com/ebalia-real/launcher/live/mods.json`, que el flujo `live-data.yml` renueva cada hora con `site-src/live.py` desde CurseForge y Modrinth, igual que la página. El launcher guarda la última copia en `cache/ebalia-mods.json` y la vuelve a pedir cada 30 minutos; sin conexión muestra la copia o los mods incluidos. Solo acepta direcciones https de CurseForge y Modrinth.
+
+**Noticias** separa Minecraft de **EBALIA · Patreon**. Patreon distingue publicaciones públicas y publicaciones autorizadas para una cuenta con membresía activa de pago. El servidor recibe webhooks firmados, avisa a los launchers conectados y vuelve a verificar la membresía antes de entregar publicaciones privadas. Se conserva una consulta de respaldo cada minuto. Sin el servicio configurado no se simula que una cuenta esté enlazada ni que haya contenido privado disponible.
+
+El servicio está en [services/patreon](services/patreon/README.md), con plantilla **Render Free + Neon Free**, contenedor y pruebas. La guía explica qué hacer con la aplicación OAuth de Patreon ya creada, la URL de redirección y el webhook. Los secretos quedan en variables del servidor; el ejecutable incorpora únicamente su URL pública mediante `patreon-service-url.txt` o `EBALIA_PATREON_SERVICE_URL` de CMake.
+
+## Rendimiento e iconos de los paquetes
+
+La decodificación de portadas trabaja fuera del hilo de la interfaz, con dos tareas como máximo. Las miniaturas tienen una caché separada para que un fondo grande no las expulse durante el scroll. Las solicitudes simultáneas se agrupan y los resultados de widgets cerrados se descartan. En la prueba local de 1920×1080, el scroll del archivo pasó de 716 ms a 3,6 ms de media por actualización; estas mediciones no garantizan la misma cifra en cualquier equipo.
+
+El paquete de Windows incorpora `ebalia.ico` con seis tamaños (16–256 px), macOS incluye `ebalia.icns` dentro del bundle y Linux instala PNGs de 16–512 px en el tema hicolor, junto al archivo `.desktop` y la identidad de ventana. `packaging/verify-icons.py` comprueba los recursos de iconos y permite verificar un paquete nativo. El workflow ejecuta las pruebas en Linux, Windows y macOS; una compilación exitosa no sustituye las pruebas de juego en cada sistema.
+
+Para analizar la carpeta final de Windows en un equipo con Microsoft Defender activo:
+
+```powershell
+./packaging/check-windows-release.ps1 -PackagePath ./package/bin
+# En una distribución firmada:
+./packaging/check-windows-release.ps1 -PackagePath ./package/bin -RequireSignature
+```
+
+La comprobación no modifica Defender ni agrega exclusiones. Un resultado sin detecciones corresponde a esos archivos y esa versión de las firmas. No garantiza resultados futuros ni elimina por sí solo avisos de SmartScreen. La firma requiere un certificado real del editor; no se ha firmado ni escaneado un ejecutable Windows desde este equipo Linux. Los falsos positivos se envían al [portal oficial de Microsoft](https://www.microsoft.com/wdsi/filesubmission).
+
+
+## Actualización interna, instalación y guía inicial
+
+Desde 1.1.0, **Actualizar y reiniciar** usa los paquetes de la release y `SHA256SUMS.txt`. La preparación ocurre en segundo plano; se prueba el ejecutable nuevo con `--update-probe` antes del reemplazo. Las partidas y operaciones administradas por el launcher impiden iniciar la actualización. Los detalles para usuarios están en el [README principal](../README.md#actualizaciones-y-archivos-del-usuario).
+
+`packaging/write-update-manifest.py` registra los archivos que pertenecen al programa. El reemplazo no elimina archivos ajenos a ese manifiesto. La prueba de actualización cubre archivos de usuario conservados, rechazo de checksums ausentes, limpieza y restauración tras una verificación fallida. NixOS prepara una derivación nueva y conserva un enlace raíz de Nix; no elimina rutas del almacén que estén referenciadas por otras instalaciones.
+
+El instalador NSIS guarda `InstallLocation` en el registro del usuario y reconoce el `UninstallString` de instaladores anteriores para recuperar su carpeta. No cambia la identidad de datos `EBALIA / EBALIA Launcher` ni borra instancias o Lost Versions. Quienes usan 1.0.0 deben instalar una versión 1.1.0 o posterior una vez para incorporar el actualizador.
+
+La guía interactiva se abre si `ui/tutorialSeen` no está marcado. Completarla u omitirla guarda esa preferencia. **Guía y tutorial → Iniciar guía interactiva** permite repetir sus 14 pasos. El recorrido se prueba a 640 × 480 y no realiza instalaciones ni modifica cuentas.
