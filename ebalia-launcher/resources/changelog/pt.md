@@ -1,3 +1,9 @@
+# 1.2.4 (2026-10-25)
+
+- As skins locais funcionam no 1.21.9 e no 26.x: essas versões nomeiam de outro jeito o formato dos pacotes de recursos e o launcher as recusava como incompatíveis. O pack da skin agora segue o formato de cada versão, do 1.6 ao 26.x.
+- Skins → Aplicar localmente a todas as instâncias: a skin passa a ser a skin local de todas as instâncias, mesmo antes de você criar uma. As instaladas a recebem na hora, as novas assim que são instaladas, e as que estão abertas ou instalando, ao iniciar. Aplicar localmente a uma instância continua dando a uma só a sua própria skin, e Restaurar aparência local oferece primeiro todas as instâncias.
+- No NixOS, as janelas do Minecraft 26.x têm barra de título e bordas no GNOME (Wayland).
+
 # 1.2.3 (2026-10-20)
 
 - As Versões perdidas são baixadas da própria publicação da EBALIA, e os arquivos delas não trazem mais registros e relatórios de erro que sobravam de outros launchers. As que você já instalou continuam funcionando; a próxima que você instalar baixa o arquivo dela mais uma vez.

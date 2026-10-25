@@ -35,26 +35,27 @@ The Windows and macOS packages ship **without a publisher's digital signature** 
 ### NixOS
 
 ```sh
-mkdir ebalia-launcher-1.2.3
-cd ebalia-launcher-1.2.3
-nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.2.3?dir=ebalia-launcher'
+mkdir ebalia-launcher-1.2.4
+cd ebalia-launcher-1.2.4
+nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.2.4?dir=ebalia-launcher'
 ./result/bin/ebalia-launcher
 ```
 
 Create the folder without `sudo`. The first build can take a while and download dependencies; the package runs the tests while building and gives the launcher Java 8, 17, 21 and 25. Bedrock on NixOS also needs `services.flatpak.enable = true` in the system configuration (then rebuild it).
 
-## What's new in 1.2.3
+## What's new in 1.2.4
 
-- **Lost Versions from EBALIA's own release:** their archives download from [lost-versions](https://github.com/ebalia-real/launcher/releases/tag/lost-versions) and no longer carry logs and crash reports from other launchers. The ones you already installed keep working.
+- **Local skins on 1.21.9 and 26.x,** which the launcher used to refuse.
+- **Apply locally to all instances:** the chosen skin becomes every instance's, even before you create one; new instances get it as soon as they are installed.
 
-In 1.2.2:
+In 1.2.3 the lost versions moved to EBALIA's own release. In 1.2.2:
 
 - **Discover mods searches while you type:** mods, resource packs, shaders and the modpacks when creating an instance; the results come once you pause, without Enter, and searching no longer stutters.
 - **EBALIA's own mods and the collaborations apart,** as on the site: Home shows only its own, and a new mod by EBALIA with other authors (like Neighbor.jar) joins the collaborations by itself, credited.
 - **A new EBALIA Mods window:** cards like Home's with the picture, the downloads, who made it, the description in your language and CurseForge and Modrinth buttons; the total downloads at the top.
 - **A tidier Bedrock page:** Play beside the version, the actions in one row and the help as links.
 
-If you are on **1.0.0**, install **1.2.3 once** by hand, because 1.0.0 does not have this updater; after that, updates come from the launcher. You do not need to uninstall first or delete your data. Releases 1.1.1 to 1.2.1 brought, besides half the memory, screenshots for the lost versions, pixel-art icons, the Changelog section, the uninstaller and the mods' downloads up to date, among other things, resource packs and shaders in Discover mods, the "Already installed" mark, 3D skins and themes. [Notes for every release](ebalia-launcher/CHANGELOG.md).
+If you are on **1.0.0**, install **1.2.4 once** by hand, because 1.0.0 does not have this updater; after that, updates come from the launcher. You do not need to uninstall first or delete your data. Releases 1.1.1 to 1.2.1 brought, besides half the memory, screenshots for the lost versions, pixel-art icons, the Changelog section, the uninstaller and the mods' downloads up to date, among other things, resource packs and shaders in Discover mods, the "Already installed" mark, 3D skins and themes. [Notes for every release](ebalia-launcher/CHANGELOG.md).
 
 ## What you can do
 

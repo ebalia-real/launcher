@@ -1,3 +1,13 @@
+# 1.2.4 (2026-10-25)
+
+- Local skins work on 1.21.9 and 26.x: those versions name their resource pack format differently, and the launcher
+  refused them as unsupported. The skin pack now follows each version's format, from 1.6 to 26.x.
+- Skins → Apply locally to all instances: the skin becomes the local skin of every instance, even before you create
+  one. Installed instances get it at once, new ones as soon as they are installed, and the ones that are open or
+  installing when they start. Apply locally to an instance still gives one instance its own skin, and Restore local
+  appearance offers all instances first.
+- On NixOS, Minecraft 26.x windows have their title bar and borders on GNOME (Wayland).
+
 # 1.2.3 (2026-10-20)
 
 - Lost Versions download from EBALIA's own release, and their archives no longer carry leftover logs and crash reports

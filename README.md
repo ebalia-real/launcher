@@ -35,26 +35,27 @@ Los paquetes de Windows y macOS se distribuyen **sin firma digital** del editor 
 ### NixOS
 
 ```sh
-mkdir ebalia-launcher-1.2.3
-cd ebalia-launcher-1.2.3
-nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.2.3?dir=ebalia-launcher'
+mkdir ebalia-launcher-1.2.4
+cd ebalia-launcher-1.2.4
+nix --extra-experimental-features 'nix-command flakes' build 'github:ebalia-real/launcher/v1.2.4?dir=ebalia-launcher'
 ./result/bin/ebalia-launcher
 ```
 
 Creá la carpeta sin `sudo`. La primera compilación puede tardar y descargar dependencias; el paquete corre las pruebas al compilar y le da al launcher Java 8, 17, 21 y 25. Para Bedrock en NixOS también hace falta `services.flatpak.enable = true` en la configuración del sistema (y reconstruirlo).
 
-## Novedades de 1.2.3
+## Novedades de 1.2.4
 
-- **Versiones perdidas desde la publicación de EBALIA:** sus archivos se descargan de [lost-versions](https://github.com/ebalia-real/launcher/releases/tag/lost-versions) y ya no traen registros ni informes de errores de otros launchers. Las que ya instalaste siguen funcionando.
+- **Skins locales en 1.21.9 y 26.x,** que antes el launcher rechazaba.
+- **Aplicar localmente a todas las instancias:** la skin elegida pasa a ser la de todas, incluso antes de crear una; las nuevas la reciben apenas se instalan.
 
-En 1.2.2:
+En 1.2.3 las versiones perdidas pasaron a descargarse desde la publicación de EBALIA. En 1.2.2:
 
 - **Explorar mods busca mientras escribís:** mods, paquetes de recursos, shaders y los modpacks al crear una instancia; los resultados llegan apenas hacés una pausa, sin Enter, y buscar ya no da tirones.
 - **Mods propios y colaboraciones por separado,** como en la página: Inicio muestra solo los propios, y un mod nuevo de EBALIA con otros autores (como Neighbor.jar) entra solo en las colaboraciones, con su crédito.
 - **La ventana EBALIA Mods es nueva:** tarjetas como las de Inicio con la imagen, las descargas, quién lo hizo, la descripción en tu idioma y botones de CurseForge y Modrinth; arriba, el total de descargas.
 - **Bedrock más ordenado:** Jugar al lado de la versión, las acciones en una fila y la ayuda como enlaces.
 
-Si venís de **1.0.0**, instalá **1.2.3 una vez** a mano, porque 1.0.0 no trae este actualizador; después las actualizaciones llegan desde el launcher. No hace falta desinstalar antes ni borrar tus datos. Entre 1.1.1 y 1.2.1 llegaron, además de la mitad de memoria, las capturas de las versiones perdidas, los íconos en pixel art, la sección Cambios, el desinstalador y las descargas de los mods al día, entre otras cosas, paquetes de recursos y shaders en Explorar mods, la marca «Ya instalado», skins en 3D y temas. [Notas de todas las versiones](ebalia-launcher/CHANGELOG.md) (en inglés).
+Si venís de **1.0.0**, instalá **1.2.4 una vez** a mano, porque 1.0.0 no trae este actualizador; después las actualizaciones llegan desde el launcher. No hace falta desinstalar antes ni borrar tus datos. Entre 1.1.1 y 1.2.1 llegaron, además de la mitad de memoria, las capturas de las versiones perdidas, los íconos en pixel art, la sección Cambios, el desinstalador y las descargas de los mods al día, entre otras cosas, paquetes de recursos y shaders en Explorar mods, la marca «Ya instalado», skins en 3D y temas. [Notas de todas las versiones](ebalia-launcher/CHANGELOG.md) (en inglés).
 
 ## Qué podés hacer
 
