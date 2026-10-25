@@ -27,12 +27,26 @@ SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *in
     auto add=[&](QString title,std::function<void()> fn){auto b=new QPushButton(title);controls->addWidget(b);connect(b,&QPushButton::clicked,this,fn);return b;};
     add(key("Import PNG skin"),[this]{importSkin();});
     add(key("Apply to Microsoft account"),[this]{apply(false);})->setProperty("play",true);
-    add(key("Apply locally to an instance"),[this]{apply(true);});
+    // Locally: the skin of every instance (also the ones created later, when they start), or of one; each instance keeps
+    // the one it was given alone until the skin of all of them changes.
+    add(key("Apply locally to all instances"),[this]{applyAll();})->setObjectName("applyLocalAll");
+    add(key("Apply locally to an instance"),[this]{apply(true);})->setObjectName("applyLocalOne");
     add(key("Restore local appearance"),[this]{
-        QStringList names;QList<McInstance> targets;for(const auto &i:m_instances->instances())if(!m_instances->isRunning(i.dir)&&!m_instances->isInstalling(i.dir)){names<<i.name+" · "+i.mcVersion;targets<<i;}
-        bool ok;auto value=QInputDialog::getItem(this,key("Restore local appearance"),key("Instance"),names,0,false,&ok);if(!ok||names.indexOf(value)<0)return;
-        try{SkinManager::removeLocal(targets[names.indexOf(value)].dir);m_details->setText(key("Local appearance restored."));}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
+        auto busy=[this](const McInstance &i){return m_instances->isRunning(i.dir)||m_instances->isInstalling(i.dir);};
+        QStringList names{key("All instances")};QList<McInstance> targets;for(const auto &i:m_instances->instances())if(!busy(i)){names<<i.name+" · "+i.mcVersion;targets<<i;}
+        bool ok;auto value=QInputDialog::getItem(this,key("Restore local appearance"),key("Instance"),names,0,false,&ok);const int choice=names.indexOf(value);if(!ok||choice<0)return;
+        try{
+            if(choice==0){
+                SkinManager::clearDefaultLocal(m_root);
+                for(const auto &i:m_instances->instances()){if(SkinManager::localMode(i.dir).isEmpty())continue;
+                    if(busy(i))SkinManager::markLocal(i.dir,"restore"); // open: when it starts again
+                    else{SkinManager::removeLocal(i.dir);SkinManager::markLocal(i.dir,{});}}
+                m_details->setText(key("Local appearance restored in every instance."));
+            }else{const auto &target=targets[choice-1];SkinManager::removeLocal(target.dir);SkinManager::markLocal(target.dir,"none");m_details->setText(key("Local appearance restored."));}
+        }catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
+        showDefaultLocal();
     });
+    m_defaultLocal=new QLabel;m_defaultLocal->setObjectName("defaultLocalSkin");m_defaultLocal->setWordWrap(true);m_defaultLocal->setTextFormat(Qt::PlainText);controls->addWidget(m_defaultLocal);showDefaultLocal();
     // Skins of the library only: the one an account wears comes from Microsoft or the game.
     m_remove=add(key("Delete skin"),[this]{removeSkin();});m_remove->setObjectName("deleteSkin");m_remove->setProperty("danger",true);m_remove->setEnabled(false);
     auto shortcut=new QShortcut(QKeySequence::Delete,m_list,nullptr,nullptr,Qt::WidgetShortcut);connect(shortcut,&QShortcut::activated,this,[this]{if(m_remove->isEnabled())removeSkin();});
@@ -80,7 +94,7 @@ void SkinsPage::apply(bool local){
         QStringList names;QList<McInstance> targets;for(const auto &i:m_instances->instances())if(i.ready&&!m_instances->isRunning(i.dir)&&!m_instances->isInstalling(i.dir)){names<<i.name+" · "+i.mcVersion;targets<<i;}
         if(names.isEmpty()){QMessageBox::information(this,"EBALIA",key("Install an instance and close the game before applying a local skin."));return;}
         bool ok;auto value=QInputDialog::getItem(this,key("Apply locally to an instance"),key("Instance"),names,0,false,&ok);if(!ok)return;auto target=targets[names.indexOf(value)];auto jar=m_instances->mcDir()+"/versions/"+target.mcVersion+"/"+target.mcVersion+".jar";
-        m_work(key("Applying skin…"),[=]{SkinManager::applyLocal(file,variant,target.dir,jar);return QJsonObject{};},[this](QJsonObject){m_details->setText(key("Skin applied. Start the game to see it."));});return;
+        m_work(key("Applying skin…"),[=]{SkinManager::applyLocal(file,variant,target.dir,jar);SkinManager::markLocal(target.dir,"own");return QJsonObject{};},[this](QJsonObject){m_details->setText(key("Skin applied. Start the game to see it."));});return;
     }
     auto account=m_accounts->active();if(account.type!="msa"){QMessageBox::information(this,"EBALIA",key("Choose a Microsoft account to apply an online skin."));return;}
     QProgressDialog progress(key("Refreshing session…"),key("Cancel"),0,0,this);progress.setWindowModality(Qt::ApplicationModal);MsAuth auth;QString token,refresh,uuid,name;
@@ -89,6 +103,33 @@ void SkinsPage::apply(bool local){
     QTimer::singleShot(0,&auth,[&]{auth.refresh(account.refreshToken);});progress.exec();auth.cancel();if(token.isEmpty())return;
     m_accounts->addAccount({"msa",name,uuid,token,refresh});
     m_work(key("Applying skin…"),[=]{SkinManager::upload(file,variant,token);return QJsonObject{};},[this,file,uuid](QJsonObject){m_accounts->setSkinHead(uuid,SkinManager::head(QImage(file)));m_details->setText(key("Skin applied. Start the game to see it."));});
+}
+void SkinsPage::applyAll(){
+    const int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;const auto skin=m_skins[index].toObject();
+    const auto file=skin["file"].toString(),variant=skin["variant"].toString(),name=skin["name"].toString().section(" — ",0,0);
+    // Installed and closed: now. Open, being installed or not installed yet: when they start (McInstanceManager::launch).
+    struct Target{QString name,dir,jar;bool now;};QList<Target> targets;
+    for(const auto &i:m_instances->instances())targets<<Target{i.name,i.dir,m_instances->mcDir()+"/versions/"+i.mcVersion+"/"+i.mcVersion+".jar",i.ready&&!m_instances->isRunning(i.dir)&&!m_instances->isInstalling(i.dir)};
+    const auto root=m_root;
+    m_work(key("Applying skin…"),[=]{
+        SkinManager::setDefaultLocal(root,file,variant,name);const auto chosen=SkinManager::defaultLocal(root);
+        int done=0,later=0;QJsonArray failed;
+        for(const auto &t:targets){
+            if(!t.now){SkinManager::markLocal(t.dir,"default");++later;continue;}
+            try{SkinManager::applyLocal(chosen["file"].toString(),variant,t.dir,t.jar);SkinManager::markLocal(t.dir,"default",chosen["stamp"].toString());++done;}
+            catch(const std::exception &e){SkinManager::markLocal(t.dir,"default");failed.append(QJsonObject{{"name",t.name},{"error",QString::fromUtf8(e.what())}});}
+        }
+        return QJsonObject{{"done",done},{"later",later},{"failed",failed}};
+    },[this](QJsonObject result){
+        QStringList lines{result["done"].toInt()+result["later"].toInt()>0?key("Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.").arg(result["done"].toInt())
+                                                                           :key("Saved as the local skin of all instances: new instances get it as soon as they are installed.")};
+        for(const auto &f:result["failed"].toArray())lines<<key("Could not apply it to %1: %2").arg(f.toObject()["name"].toString(),Language::message(f.toObject()["error"].toString()));
+        m_details->setText(lines.join('\n'));showDefaultLocal();
+    });
+}
+void SkinsPage::showDefaultLocal(){
+    const auto chosen=SkinManager::defaultLocal(m_root);
+    m_defaultLocal->setText(chosen.isEmpty()?key("Local skin of all instances: none"):key("Local skin of all instances: %1").arg(chosen["name"].toString()));
 }
 
 // Profiles without Minecraft (no premium) wear one of the game's default skins (see SkinManager::defaultSkin).

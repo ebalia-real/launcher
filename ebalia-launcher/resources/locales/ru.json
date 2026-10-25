@@ -1135,5 +1135,12 @@
   "modTwoDoors": "Серия «2 doors» от LookOut3D — теперь в вашем мире.",
   "modSalvation": "Ремейк мода с новыми звуками, эффектами экрана и событиями.",
   "modAlive": "Ваш мир жив… и он всё осознаёт.",
-  "modNeighbor": "Добавляет Джеральда — соседа, который придёт к вам в гости."
+  "modNeighbor": "Добавляет Джеральда — соседа, который придёт к вам в гости.",
+  "Apply locally to all instances": "Применить локально ко всем сборкам",
+  "Local appearance restored in every instance.": "Локальный вид восстановлен во всех сборках.",
+  "Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.": "Скин применён к сборкам: %1. Новые сборки получат его сразу после установки, а открытые или ещё устанавливающиеся — при запуске.",
+  "Saved as the local skin of all instances: new instances get it as soon as they are installed.": "Сохранён как локальный скин всех сборок: новые сборки получат его сразу после установки.",
+  "Could not apply it to %1: %2": "Не удалось применить к %1: %2",
+  "Local skin of all instances: none": "Локальный скин всех сборок: нет",
+  "Local skin of all instances: %1": "Локальный скин всех сборок: %1"
 }

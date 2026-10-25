@@ -923,6 +923,24 @@ private slots:
         QTimer::singleShot(300,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto box=qobject_cast<QMessageBox*>(w);box&&box->isVisible())box->button(QMessageBox::Yes)->click();});
         remove->click();QCOMPARE(list->count(),1);QCOMPARE(list->currentRow(),0);QCOMPARE(SkinManager(data.path()).skins().size(),1);QVERIFY(QFile::exists(png));
     }
+    void localSkinForAllInstances(){
+        // Without any instance yet, the chosen skin becomes the local skin of all instances (new ones get it when they
+        // are installed); the button for one instance stays, and Restore offers all instances first.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        QImage image(64,64,QImage::Format_ARGB32);image.fill(QColor(30,140,200));const auto png=data.path()+"/blue.png";QVERIFY(image.save(png));
+        SkinManager(data.path()).importSkin(png,"Blue","classic");
+        MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Skins);
+        auto all=window.findChild<QPushButton*>("applyLocalAll");auto one=window.findChild<QPushButton*>("applyLocalOne");auto chosen=window.findChild<QLabel*>("defaultLocalSkin");
+        QVERIFY(all&&one&&chosen);QCOMPARE(all->text(),Language::key("Apply locally to all instances"));QCOMPARE(chosen->text(),Language::key("Local skin of all instances: none"));
+        auto list=window.findChild<QListWidget*>("skinList");QCOMPARE(list->currentRow(),0);
+        all->click();QTRY_COMPARE(chosen->text(),Language::key("Local skin of all instances: %1").arg("Blue"));
+        QVERIFY(QFile::exists(data.path()+"/skins/local-default.png"));QCOMPARE(SkinManager::defaultLocal(data.path())["variant"].toString(),QString("classic"));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);window.grab().save(out+"/skins-all-instances.png");}
+        // Restore → All instances: no skin for all any more
+        QTimer::singleShot(300,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QInputDialog*>(w);d&&d->isVisible()){QCOMPARE(d->comboBoxItems().value(0),Language::key("All instances"));d->setTextValue(Language::key("All instances"));d->accept();}});
+        for(auto b:window.findChildren<QPushButton*>())if(b->text()==Language::key("Restore local appearance")){b->click();break;}
+        QCOMPARE(chosen->text(),Language::key("Local skin of all instances: none"));QVERIFY(SkinManager::defaultLocal(data.path()).isEmpty());
+    }
     void skinHeads(){
         // Account pictures become skin heads: Microsoft (a public profile) and a profile without premium (default skin
         // from a downloaded game, EBALIA_TEST_VERSIONS); the Skins list shows the head next to each skin.

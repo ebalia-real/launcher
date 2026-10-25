@@ -1,4 +1,5 @@
 #include "McInstanceManager.hpp"
+#include "SkinManager.hpp"
 #include "ModRepository.hpp"
 #include "Archive.hpp"
 #include "Loaders.hpp"
@@ -423,6 +424,7 @@ void McInstanceManager::install(const QString &dir) {
     javaFor(dir,info,profile); // Download the official runtime now rather than when the player presses Play.
     profile["ebaliaProfile"]=profileFormat;
     ModRepository::write(dir+"/launch-profile.json",profile);
+    SkinManager::prepareLocal(QFileInfo(m_root).path(),dir,m_root+"/versions/"+game+"/"+game+".jar"); // a new instance wears the local skin of all instances from the start
     info["ready"]=true; ModRepository::write(dir+"/instance.json",info); emit installProgress(dir,100,"Instalación completa");
 }
 QString McInstanceManager::javaFor(const QString &dir,const QJsonObject &info,const QJsonObject &profile) {
@@ -488,6 +490,7 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
             if (!path.isEmpty()) { auto f=m_root+"/libraries/"+safeRelative(path); if (!QFile::exists(f)) fail("Falta una biblioteca; usá Reparar."); cp << f; }
         }
         auto jar=m_root+"/versions/"+game+"/"+game+".jar"; if (!QFile::exists(jar)) fail("Falta el cliente; usá Reparar."); cp << jar;
+        SkinManager::prepareLocal(QFileInfo(m_root).path(),dir,jar); // the local skin of all instances, before the game reads options.txt
         auto assetsId=s(p["assetIndex"].toObject(),"id");
         QMap<QString,QString> values{{"auth_player_name",name},{"auth_uuid",uuid},{"auth_access_token",token.isEmpty()?"0":token},
             {"auth_session",token.isEmpty()?"0":token},{"user_type",type},{"user_properties","{}"},{"version_name",game},

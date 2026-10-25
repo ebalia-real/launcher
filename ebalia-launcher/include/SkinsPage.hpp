@@ -15,6 +15,7 @@ public:
     SkinsPage(QString root,AccountManager *accounts,McInstanceManager *instances,Work work,QWidget *parent=nullptr);
 private:
     void refresh();void showSkin();void showDefaultSkin(const QString &name,const QString &uuid);void importSkin();void apply(bool local);void removeSkin();
+    void applyAll();void showDefaultLocal();
     QString m_root;AccountManager *m_accounts;McInstanceManager *m_instances;Work m_work;
-    QListWidget *m_list;SkinViewer *m_preview;QLabel *m_details;QPushButton *m_remove=nullptr;QJsonArray m_skins;
+    QListWidget *m_list;SkinViewer *m_preview;QLabel *m_details;QLabel *m_defaultLocal=nullptr;QPushButton *m_remove=nullptr;QJsonArray m_skins;
 };

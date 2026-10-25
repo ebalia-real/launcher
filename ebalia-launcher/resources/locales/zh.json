@@ -1135,5 +1135,12 @@
   "modTwoDoors": "LookOut3D 的“2 doors”系列，如今来到你的世界。",
   "modSalvation": "该模组的重制版，加入了新的音效、屏幕效果和事件。",
   "modAlive": "你的世界是活的……而且有意识。",
-  "modNeighbor": "加入邻居杰拉德，他会来你的世界拜访你。"
+  "modNeighbor": "加入邻居杰拉德，他会来你的世界拜访你。",
+  "Apply locally to all instances": "在所有实例中本地应用",
+  "Local appearance restored in every instance.": "已恢复所有实例的本地外观。",
+  "Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.": "已将皮肤应用到 %1 个实例。新实例安装完成后即会应用；正在运行或安装中的实例将在下次启动时应用。",
+  "Saved as the local skin of all instances: new instances get it as soon as they are installed.": "已保存为所有实例的本地皮肤：新实例安装完成后即会应用。",
+  "Could not apply it to %1: %2": "无法应用到 %1：%2",
+  "Local skin of all instances: none": "所有实例的本地皮肤：无",
+  "Local skin of all instances: %1": "所有实例的本地皮肤：%1"
 }

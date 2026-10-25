@@ -1135,5 +1135,12 @@
   "modTwoDoors": "La serie «2 doors» de LookOut3D, ahora en tu mundo.",
   "modSalvation": "Remake del mod con sonidos, efectos de pantalla y eventos nuevos.",
   "modAlive": "Tu mundo está vivo… y es consciente.",
-  "modNeighbor": "Agrega a Gerald, un vecino que va a visitarte en tu mundo."
+  "modNeighbor": "Agrega a Gerald, un vecino que va a visitarte en tu mundo.",
+  "Apply locally to all instances": "Aplicar localmente a todas las instancias",
+  "Local appearance restored in every instance.": "Apariencia local restaurada en todas las instancias.",
+  "Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.": "Skin aplicada a %1 instancias. Las instancias nuevas la reciben apenas se instalan; las que están abiertas o instalándose, al iniciarse.",
+  "Saved as the local skin of all instances: new instances get it as soon as they are installed.": "Guardada como skin local de todas las instancias: las instancias nuevas la reciben apenas se instalan.",
+  "Could not apply it to %1: %2": "No se pudo aplicar a %1: %2",
+  "Local skin of all instances: none": "Skin local de todas las instancias: ninguna",
+  "Local skin of all instances: %1": "Skin local de todas las instancias: %1"
 }

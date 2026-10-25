@@ -645,6 +645,68 @@ private slots:
         QImage packed(t.path()+"/unpack/assets/minecraft/textures/entity/player/wide/steve.png");QCOMPARE(packed.size(),QSize(64,64));
         SkinManager::removeLocal(instance);QVERIFY(!readFile(instance+"/options.txt").contains("file/ebalia-local-skin.zip"));QVERIFY(readFile(instance+"/options.txt").contains("music:0.5"));
     }
+    void localSkinPackFormats(){
+        // 1.21.9 and 26.x name the format as resource_major/minor and want min_format/max_format; 1.14–1.16 a number;
+        // before 1.14 there is no version.json: the format follows from the version, and options.txt has no "file/".
+        QTemporaryDir t;QImage skin(64,64,QImage::Format_RGBA8888);skin.fill(QColor("#c86363"));const auto png=t.path()+"/skin.png";QVERIFY(skin.save(png));
+        QImage old(64,32,QImage::Format_RGBA8888);old.fill(Qt::black);QByteArray oldPng;{QBuffer b(&oldPng);b.open(QIODevice::WriteOnly);QVERIFY(old.save(&b,"PNG"));}
+        auto jar=[&](const QString &path,const QMap<QString,QByteArray> &files){QDir().mkpath(QFileInfo(path).path());auto a=archive_write_new();archive_write_set_format_zip(a);QCOMPARE(archive_write_open_filename(a,QFile::encodeName(path).constData()),ARCHIVE_OK);
+            for(auto it=files.begin();it!=files.end();++it){auto e=archive_entry_new();archive_entry_set_pathname(e,it.key().toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_size(e,it.value().size());archive_write_header(a,e);archive_write_data(a,it.value().constData(),it.value().size());archive_entry_free(e);}archive_write_close(a);archive_write_free(a);};
+        const QByteArray wide="assets/minecraft/textures/entity/player/wide/steve.png";
+        auto meta=[&](const QString &instance){const auto out=t.path()+"/unpack-"+QFileInfo(instance).fileName();Archive::extract(instance+"/resourcepacks/ebalia-local-skin.zip",out);return ModRepository::read(out+"/pack.mcmeta")["pack"].toObject();};
+        // 26.2
+        jar(t.path()+"/v/26.2/26.2.jar",{{"version.json",encode(QJsonObject{{"pack_version",QJsonObject{{"resource_major",88},{"resource_minor",0},{"data_major",107},{"data_minor",1}}}})},{wide,"x"}});
+        const auto modern=t.path()+"/modern";QDir().mkpath(modern);SkinManager::applyLocal(png,"classic",modern,t.path()+"/v/26.2/26.2.jar");
+        auto m=meta(modern);QCOMPARE(m["min_format"].toArray(),(QJsonArray{88,0}));QCOMPARE(m["max_format"].toArray(),(QJsonArray{88,0}));QVERIFY(!m.contains("pack_format"));QVERIFY(!m.contains("supported_formats"));
+        QVERIFY(readFile(modern+"/options.txt").contains("\"file/ebalia-local-skin.zip\""));
+        // 1.16.5
+        jar(t.path()+"/v/1.16.5/1.16.5.jar",{{"version.json",encode(QJsonObject{{"pack_version",6}})},{"assets/minecraft/textures/entity/steve.png","x"},{"assets/minecraft/textures/entity/alex.png","x"}});
+        const auto middle=t.path()+"/middle";QDir().mkpath(middle);SkinManager::applyLocal(png,"slim",middle,t.path()+"/v/1.16.5/1.16.5.jar");QCOMPARE(meta(middle)["pack_format"].toInt(),6);
+        // 1.12.2: format 3, a bare name in options.txt, and the 64 × 32 Steve of the client stays 64 × 32
+        jar(t.path()+"/v/1.12.2/1.12.2.jar",{{"assets/minecraft/textures/entity/steve.png",oldPng},{"assets/minecraft/textures/entity/alex.png","x"}});
+        const auto legacy=t.path()+"/legacy";QDir().mkpath(legacy);writeFile(legacy+"/options.txt","resourcePacks:[\"Faithful.zip\"]\n");
+        SkinManager::applyLocal(png,"classic",legacy,t.path()+"/v/1.12.2/1.12.2.jar");QCOMPARE(meta(legacy)["pack_format"].toInt(),3);
+        QVERIFY(readFile(legacy+"/options.txt").contains("[\"Faithful.zip\",\"ebalia-local-skin.zip\"]"));
+        QCOMPARE(QImage(t.path()+"/unpack-legacy/assets/minecraft/textures/entity/steve.png").size(),QSize(64,32));QCOMPARE(QImage(t.path()+"/unpack-legacy/assets/minecraft/textures/entity/alex.png").size(),QSize(64,64));
+        SkinManager::removeLocal(legacy);QCOMPARE(readFile(legacy+"/options.txt"),QByteArray("resourcePacks:[\"Faithful.zip\"]\n"));QVERIFY(!QFile::exists(legacy+"/resourcepacks/ebalia-local-skin.zip"));
+        // before resource packs (1.5.2): no pack
+        jar(t.path()+"/v/1.5.2/1.5.2.jar",{{"assets/minecraft/textures/entity/steve.png",oldPng}});
+        QVERIFY_EXCEPTION_THROWN(SkinManager::applyLocal(png,"classic",legacy,t.path()+"/v/1.5.2/1.5.2.jar"),std::runtime_error);
+        // restoring an instance that never started does not create its options.txt
+        const auto fresh=t.path()+"/fresh";QDir().mkpath(fresh);SkinManager::removeLocal(fresh);QVERIFY(!QFile::exists(fresh+"/options.txt"));
+    }
+    void localSkinForAllInstances(){
+        // The skin of all instances goes on an instance when it is installed or starts, unless it has its own or was
+        // restored; it follows the skin when it changes, and comes back if a modpack's options.txt dropped it before
+        // the game ever ran.
+        QTemporaryDir t;const auto root=t.path()+"/root";
+        auto save=[&](QColor c,const QString &name,int height=64){QImage s(64,height,QImage::Format_RGBA8888);s.fill(c);const auto f=t.path()+"/"+name+".png";s.save(f);return f;};
+        const auto jarPath=t.path()+"/26.2.jar";{auto a=archive_write_new();archive_write_set_format_zip(a);QCOMPARE(archive_write_open_filename(a,QFile::encodeName(jarPath).constData()),ARCHIVE_OK);
+            QMap<QString,QByteArray> files{{"version.json",encode(QJsonObject{{"pack_version",QJsonObject{{"resource_major",88},{"resource_minor",0}}}})},{"assets/minecraft/textures/entity/player/wide/steve.png","x"}};
+            for(auto it=files.begin();it!=files.end();++it){auto e=archive_entry_new();archive_entry_set_pathname(e,it.key().toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_size(e,it.value().size());archive_write_header(a,e);archive_write_data(a,it.value().constData(),it.value().size());archive_entry_free(e);}archive_write_close(a);archive_write_free(a);}
+        auto instance=[&](const QString &name){const auto dir=t.path()+"/instances/"+name;QDir().mkpath(dir);return dir;};
+        auto worn=[&](const QString &dir){const auto out=t.path()+"/worn";QDir(out).removeRecursively();Archive::extract(dir+"/resourcepacks/ebalia-local-skin.zip",out);return QImage(out+"/assets/minecraft/textures/entity/player/wide/steve.png").pixelColor(0,0);};
+        QVERIFY(SkinManager::defaultLocal(root).isEmpty());
+        QVERIFY_EXCEPTION_THROWN(SkinManager::setDefaultLocal(root,save(Qt::gray,"legacy",32),"classic","Old"),std::runtime_error);
+        SkinManager::setDefaultLocal(root,save(Qt::red,"red"),"classic","Red");const auto chosen=SkinManager::defaultLocal(root);QCOMPARE(chosen["name"].toString(),QString("Red"));QVERIFY(!chosen["stamp"].toString().isEmpty());
+        // A new instance: on when it is installed, then up to date
+        const auto a=instance("a");QVERIFY(SkinManager::prepareLocal(root,a,jarPath));QCOMPARE(SkinManager::localMode(a),QString("default"));QCOMPARE(worn(a),QColor(Qt::red));
+        QVERIFY(!SkinManager::prepareLocal(root,a,jarPath));
+        // Its own skin, an older pack and a restored instance stay as they are
+        const auto own=instance("own");SkinManager::applyLocal(save(Qt::blue,"blue"),"classic",own,jarPath);SkinManager::markLocal(own,"own");QVERIFY(!SkinManager::prepareLocal(root,own,jarPath));QCOMPARE(worn(own),QColor(Qt::blue));
+        const auto older=instance("older");SkinManager::applyLocal(t.path()+"/blue.png","classic",older,jarPath);QCOMPARE(SkinManager::localMode(older),QString("own"));QVERIFY(!SkinManager::prepareLocal(root,older,jarPath));
+        const auto none=instance("none");SkinManager::markLocal(none,"none");QVERIFY(!SkinManager::prepareLocal(root,none,jarPath));QVERIFY(!QFile::exists(none+"/resourcepacks/ebalia-local-skin.zip"));
+        // A new skin for all: followed
+        SkinManager::setDefaultLocal(root,save(Qt::green,"green"),"classic","Green");QVERIFY(SkinManager::prepareLocal(root,a,jarPath));QCOMPARE(worn(a),QColor(Qt::green));
+        // Dropped by a modpack before the first game: back on; turned off after playing: stays off
+        writeFile(a+"/options.txt","resourcePacks:[\"vanilla\"]\n");QVERIFY(SkinManager::prepareLocal(root,a,jarPath));QVERIFY(readFile(a+"/options.txt").contains("file/ebalia-local-skin.zip"));
+        ModRepository::write(a+"/instance.json",{{"lastPlayed",QDateTime::currentSecsSinceEpoch()+60}});writeFile(a+"/options.txt","resourcePacks:[\"vanilla\"]\n");
+        QVERIFY(!SkinManager::prepareLocal(root,a,jarPath));QVERIFY(!readFile(a+"/options.txt").contains("ebalia-local-skin"));
+        // Restored while it was open: taken off when it starts
+        SkinManager::markLocal(a,"restore");QVERIFY(SkinManager::prepareLocal(root,a,jarPath));QCOMPARE(SkinManager::localMode(a),QString("none"));QVERIFY(!QFile::exists(a+"/resourcepacks/ebalia-local-skin.zip"));
+        // No skin for all: nothing happens
+        SkinManager::clearDefaultLocal(root);QVERIFY(SkinManager::defaultLocal(root).isEmpty());const auto later=instance("later");QVERIFY(!SkinManager::prepareLocal(root,later,jarPath));QVERIFY(!QFile::exists(later+"/resourcepacks/ebalia-local-skin.zip"));
+    }
     void liveCurseForge(){
         if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
         QVERIFY2(!ModRepository::curseForgeKey().isEmpty(),"Configure a CurseForge API key before running this test");

@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QBuffer>
 #include <QRegularExpression>
+#include <QtEndian>
 #include <archive.h>
 #include <archive_entry.h>
 #include <memory>
@@ -34,13 +35,30 @@ QImage skinImage(const QString &file){
 QByteArray png(const QImage &image){QByteArray out;QBuffer b(&out);b.open(QIODevice::WriteOnly);if(!image.save(&b,"PNG"))fail("Could not encode skin.");return out;}
 void save(const QString &path,const QByteArray &data){QSaveFile f(path);if(!f.open(QIODevice::WriteOnly)||f.write(data)!=data.size()||!f.commit())fail("Could not save skin data.");}
 QJsonArray packList(const QByteArray &options){for(const auto &line:options.split('\n'))if(line.startsWith("resourcePacks:"))return QJsonDocument::fromJson(line.mid(14)).array();return {};}
-QByteArray optionsWith(QByteArray options,bool enabled){
-    auto packs=packList(options);for(int i=packs.size()-1;i>=0;--i)if(packs[i].toString()=="file/ebalia-local-skin.zip")packs.removeAt(i);
-    if(enabled)packs.append("file/ebalia-local-skin.zip");auto replacement="resourcePacks:"+QJsonDocument(packs).toJson(QJsonDocument::Compact);
+// The pack in options.txt: "file/<name>" since 1.13, the bare name before.
+QByteArray optionsWith(QByteArray options,bool enabled,bool prefixed=true){
+    auto packs=packList(options);for(int i=packs.size()-1;i>=0;--i)if(packs[i].toString()=="file/ebalia-local-skin.zip"||packs[i].toString()=="ebalia-local-skin.zip")packs.removeAt(i);
+    if(enabled)packs.append(prefixed?"file/ebalia-local-skin.zip":"ebalia-local-skin.zip");auto replacement="resourcePacks:"+QJsonDocument(packs).toJson(QJsonDocument::Compact);
     auto lines=options.split('\n');bool found=false;for(auto &line:lines)if(line.startsWith("resourcePacks:")){line=replacement;found=true;}
     if(!found)lines.append(replacement);return lines.join('\n');
 }
 QByteArray options(const QString &dir){QFile f(dir+"/options.txt");if(!f.exists())return {};if(!f.open(QIODevice::ReadOnly))fail("Could not read instance options.");return f.readAll();}
+// A client's resource pack format. version.json has it since 1.14: a number until 1.16, {"resource": n} until 1.21.8,
+// {"resource_major": n, "resource_minor": m} since 1.21.9. Older clients have none: it follows from the version
+// (resource packs start at 1.6).
+struct PackFormat{int major=0,minor=0;};
+PackFormat packFormat(const QJsonValue &pack){
+    if(pack.isDouble())return {pack.toInt(),0};
+    const auto o=pack.toObject();if(o.contains("resource_major"))return {o["resource_major"].toInt(),o["resource_minor"].toInt()};
+    const auto resource=o["resource"];return {resource.isObject()?resource.toObject()["major"].toInt():resource.toInt(),0};
+}
+PackFormat legacyPackFormat(const QString &version){
+    static const QRegularExpression release(R"(^1\.(\d+)(?:\.\d+)?$)");const auto m=release.match(version);if(!m.hasMatch())return {};
+    const int minor=m.captured(1).toInt();
+    if(minor>=6&&minor<=8)return {1,0};if(minor>=9&&minor<=10)return {2,0};if(minor>=11&&minor<=12)return {3,0};if(minor==13)return {4,0};return {};
+}
+// The height of a PNG from its header: 32 for the old 64 × 32 default skins; 64 when it cannot tell.
+int pngHeight(const QByteArray &head){return head.size()>=24&&head.startsWith("\x89PNG")?int(qFromBigEndian<quint32>(head.constData()+20)):64;}
 QImage modelTexture(const QImage &src,bool sourceSlim,bool targetSlim){
     if(sourceSlim==targetSlim)return src;
     QImage out=src;QPainter p(&out);int sw=sourceSlim?3:4,dw=targetSlim?3:4;
@@ -96,21 +114,26 @@ void SkinManager::applyLocal(const QString &file,const QString &variant,const QS
     if(variant!="classic"&&variant!="slim")fail("Invalid skin model.");
     std::unique_ptr<archive,decltype(&archive_read_free)> a(archive_read_new(),archive_read_free);archive_read_support_format_zip(a.get());
     if(clientJar.isEmpty()||archive_read_open_filename(a.get(),QFile::encodeName(clientJar).constData(),65536)!=ARCHIVE_OK)fail("Install the instance before applying a local skin.");
-    archive_entry *entry;int format=0;QStringList textures;
+    archive_entry *entry;PackFormat format;QList<QPair<QString,int>> textures; // each default skin, with its height
+    auto read=[&](qint64 limit){QByteArray data;char buffer[8192];la_ssize_t n;while(data.size()<limit&&(n=archive_read_data(a.get(),buffer,sizeof(buffer)))>0)data.append(buffer,n);return data;};
     while(archive_read_next_header(a.get(),&entry)==ARCHIVE_OK){auto path=QString::fromUtf8(archive_entry_pathname(entry));
-        if(path=="version.json"){QByteArray data;char buffer[8192];la_ssize_t n;while((n=archive_read_data(a.get(),buffer,sizeof(buffer)))>0){data.append(buffer,n);if(data.size()>1024*1024)fail("Invalid game metadata.");}const auto version=QJsonDocument::fromJson(data).object()["pack_version"].toObject();const QJsonValue p=version["resource"];format=p.isObject()?p.toObject()["major"].toInt():p.toInt();}
-        if(path.startsWith("assets/minecraft/textures/entity/player/")&&path.endsWith(".png")&&path.split('/').size()==7)textures<<path;
-        if(path=="assets/minecraft/textures/entity/steve.png"||path=="assets/minecraft/textures/entity/alex.png")textures<<path;
+        if(path=="version.json"){const auto data=read(1024*1024+1);if(data.size()>1024*1024)fail("Invalid game metadata.");format=packFormat(QJsonDocument::fromJson(data).object()["pack_version"]);}
+        else if((path.startsWith("assets/minecraft/textures/entity/player/")&&path.endsWith(".png")&&path.split('/').size()==7)
+            ||path=="assets/minecraft/textures/entity/steve.png"||path=="assets/minecraft/textures/entity/alex.png")textures<<qMakePair(path,pngHeight(read(24)));
     }
-    if(format==0||textures.isEmpty())fail("This game version does not support the local skin pack. Use a Microsoft skin instead.");
+    if(format.major==0)format=legacyPackFormat(QFileInfo(clientJar).completeBaseName()); // versions/<id>/<id>.jar
+    if(format.major==0||textures.isEmpty())fail("This game version does not support the local skin pack. Use a Microsoft skin instead.");
     QTemporaryDir stage;auto path=stage.path()+"/skin.zip";
     std::unique_ptr<archive,decltype(&archive_write_free)> zip(archive_write_new(),archive_write_free);archive_write_set_format_zip(zip.get());
     if(archive_write_open_filename(zip.get(),QFile::encodeName(path).constData())!=ARCHIVE_OK)fail("Could not create skin pack.");
     auto add=[&](const QString &name,const QByteArray &bytes){auto e=archive_entry_new();archive_entry_set_pathname(e,name.toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_perm(e,0644);archive_entry_set_size(e,bytes.size());int status=archive_write_header(zip.get(),e);archive_entry_free(e);if(status!=ARCHIVE_OK||archive_write_data(zip.get(),bytes.constData(),bytes.size())!=bytes.size())fail("Could not write skin pack.");};
-    add("pack.mcmeta",QJsonDocument(QJsonObject{{"pack",QJsonObject{{"pack_format",format},{"description","EBALIA local skin (client only)"}}}}).toJson());
-    for(const auto &texture:textures)add(texture,png(modelTexture(image,variant=="slim",texture.contains("/slim/")||texture.endsWith("/alex.png"))));
+    // Since 1.21.9 (format 65) a pack names the formats it supports as [major, minor] and no longer has pack_format.
+    QJsonObject meta{{"description","EBALIA local skin (client only)"}};
+    if(format.major>=65){const QJsonArray exact{format.major,format.minor};meta["min_format"]=exact;meta["max_format"]=exact;}else meta["pack_format"]=format.major;
+    add("pack.mcmeta",QJsonDocument(QJsonObject{{"pack",meta}}).toJson());
+    for(const auto &[texture,height]:textures){auto skin=modelTexture(image,variant=="slim",texture.contains("/slim/")||texture.endsWith("/alex.png"));if(height==32)skin=skin.copy(0,0,64,32);add(texture,png(skin));}
     if(archive_write_close(zip.get())!=ARCHIVE_OK)fail("Could not finish skin pack.");
-    auto updated=optionsWith(options(instance),true);QDir().mkpath(instance+"/resourcepacks");QFile generated(path);
+    auto updated=optionsWith(options(instance),true,format.major>=4);QDir().mkpath(instance+"/resourcepacks");QFile generated(path);
     if(!generated.open(QIODevice::ReadOnly))fail("Could not read generated skin pack.");
     auto destination=instance+"/resourcepacks/ebalia-local-skin.zip";QFile previous(destination);bool existed=previous.exists();QByteArray original;
     if(existed){if(!previous.open(QIODevice::ReadOnly))fail("Could not back up local skin pack.");original=previous.readAll();previous.close();}
@@ -118,7 +141,50 @@ void SkinManager::applyLocal(const QString &file,const QString &variant,const QS
     try{save(instance+"/options.txt",updated);}catch(...){if(existed)save(destination,original);else QFile::remove(destination);throw;}
 
 }
-void SkinManager::removeLocal(const QString &instance){save(instance+"/options.txt",optionsWith(options(instance),false));}
+void SkinManager::removeLocal(const QString &instance){
+    if(QFile::exists(instance+"/options.txt"))save(instance+"/options.txt",optionsWith(options(instance),false));
+    QFile::remove(instance+"/resourcepacks/ebalia-local-skin.zip");
+}
+namespace {
+QString markFile(const QString &instance){return instance+"/ebalia-local-skin.json";}
+QString defaultFile(const QString &root,const QString &suffix){return root+"/skins/local-default."+suffix;}
+}
+void SkinManager::setDefaultLocal(const QString &root,const QString &file,const QString &variant,const QString &name){
+    if(variant!="classic"&&variant!="slim")fail("Invalid skin model.");const auto image=skinImage(file);if(image.height()!=64)fail("Local skins require a modern 64 × 64 PNG.");const auto data=png(image);
+    QDir().mkpath(root+"/skins");save(defaultFile(root,"png"),data);
+    const auto stamp=QString::fromLatin1(QCryptographicHash::hash(data+variant.toUtf8(),QCryptographicHash::Sha256).toHex().left(16));
+    ModRepository::write(defaultFile(root,"json"),{{"name",name},{"variant",variant},{"stamp",stamp}});
+}
+void SkinManager::clearDefaultLocal(const QString &root){QFile::remove(defaultFile(root,"json"));QFile::remove(defaultFile(root,"png"));}
+QJsonObject SkinManager::defaultLocal(const QString &root){
+    if(!QFile::exists(defaultFile(root,"json"))||!QFile::exists(defaultFile(root,"png")))return {};
+    try{auto o=ModRepository::read(defaultFile(root,"json"));o["file"]=defaultFile(root,"png");return o;}catch(...){return {};}
+}
+void SkinManager::markLocal(const QString &instance,const QString &mode,const QString &stamp){
+    if(mode.isEmpty()){QFile::remove(markFile(instance));return;}
+    QJsonObject mark{{"mode",mode}};if(!stamp.isEmpty()){mark["stamp"]=stamp;mark["applied"]=QDateTime::currentSecsSinceEpoch();}ModRepository::write(markFile(instance),mark);
+}
+QString SkinManager::localMode(const QString &instance){
+    try{if(QFile::exists(markFile(instance)))return ModRepository::read(markFile(instance))["mode"].toString();}catch(...){}
+    // A pack put on before there was a skin for all instances belongs to that instance.
+    return QFile::exists(instance+"/resourcepacks/ebalia-local-skin.zip")?"own":QString();
+}
+bool SkinManager::prepareLocal(const QString &root,const QString &instance,const QString &clientJar){
+    try{
+        QJsonObject mark;if(QFile::exists(markFile(instance)))mark=ModRepository::read(markFile(instance));
+        const auto mode=localMode(instance);
+        if(mode=="restore"){removeLocal(instance);markLocal(instance,"none");return true;} // restored while it was open
+        if(mode=="own"||mode=="none")return false;
+        const auto skin=defaultLocal(root);if(skin.isEmpty())return false;
+        if(mode=="default"&&mark["stamp"]==skin["stamp"]&&QFile::exists(instance+"/resourcepacks/ebalia-local-skin.zip")){
+            // Turned off in the game: it stays off. Gone before the game ever ran (a modpack's own options.txt): back on.
+            const auto packs=packList(options(instance));if(packs.contains(QJsonValue("file/ebalia-local-skin.zip"))||packs.contains(QJsonValue("ebalia-local-skin.zip")))return false;
+            QJsonObject info;try{info=ModRepository::read(instance+"/instance.json");}catch(...){}
+            if(info["lastPlayed"].toInteger()>=mark["applied"].toInteger())return false;
+        }
+        applyLocal(skin["file"].toString(),skin["variant"].toString(),instance,clientJar);markLocal(instance,"default",skin["stamp"].toString());return true;
+    }catch(...){return false;} // the game starts with what it had
+}
 
 QImage SkinManager::head(const QImage &skin){
     if(skin.isNull()||skin.width()<64||skin.height()<32)return {};

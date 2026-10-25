@@ -1135,5 +1135,12 @@
   "modTwoDoors": "LookOut3D의 「2 doors」 시리즈가 이제 당신의 세계에.",
   "modSalvation": "새로운 소리, 화면 효과, 이벤트를 더한 모드 리메이크.",
   "modAlive": "당신의 세계는 살아 있고… 모든 걸 알고 있습니다.",
-  "modNeighbor": "이웃 제럴드가 당신의 세계를 찾아옵니다."
+  "modNeighbor": "이웃 제럴드가 당신의 세계를 찾아옵니다.",
+  "Apply locally to all instances": "모든 인스턴스에 로컬로 적용",
+  "Local appearance restored in every instance.": "모든 인스턴스의 로컬 외형이 복원되었습니다.",
+  "Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.": "%1개 인스턴스에 스킨을 적용했습니다. 새 인스턴스는 설치가 끝나는 즉시, 실행 중이거나 설치 중인 인스턴스는 다음 시작 시 적용됩니다.",
+  "Saved as the local skin of all instances: new instances get it as soon as they are installed.": "모든 인스턴스의 로컬 스킨으로 저장했습니다. 새 인스턴스는 설치가 끝나는 즉시 적용됩니다.",
+  "Could not apply it to %1: %2": "%1에 적용하지 못했습니다: %2",
+  "Local skin of all instances: none": "모든 인스턴스의 로컬 스킨: 없음",
+  "Local skin of all instances: %1": "모든 인스턴스의 로컬 스킨: %1"
 }

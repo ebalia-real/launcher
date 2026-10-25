@@ -205,7 +205,7 @@ QToolTip{background:#26262b;color:#ffffff;border:1px solid #3a3a41;padding:5px;}
 #navigation::item:hover{background:#25252a;color:#ffffff;}
 #navigation::item:selected{background:#2b3a27;color:#ffffff;}
 #navSettings{background:transparent;border:0;border-radius:10px;padding:11px 12px;text-align:left;color:#cacad0;font-weight:600;}#navSettings:hover{background:#25252a;color:#ffffff;}#navSettings:checked{background:#2b3a27;color:#ffffff;}
-#pageTitle{font-size:28px;font-weight:800;color:#ffffff;}#pageSubtitle,#muted,#launcherLocation,#uninstallWhat,#uninstallNote{color:#a4a4ad;}#sectionTitle{font-size:18px;font-weight:800;}
+#pageTitle{font-size:28px;font-weight:800;color:#ffffff;}#pageSubtitle,#muted,#defaultLocalSkin,#launcherLocation,#uninstallWhat,#uninstallNote{color:#a4a4ad;}#sectionTitle{font-size:18px;font-weight:800;}
 #card,#settingsCard{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}
 QPushButton{background:#2a2a2f;border:1px solid #36363c;border-radius:8px;padding:9px 16px;font-weight:700;color:#f1f1f3;}
 QPushButton:hover{background:#333339;border-color:#4a4a52;}QPushButton:pressed{background:#222226;}QPushButton:disabled{color:#6f6f78;background:#202023;border-color:#2b2b30;}

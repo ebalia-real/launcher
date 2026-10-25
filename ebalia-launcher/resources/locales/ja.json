@@ -1135,5 +1135,12 @@
   "modTwoDoors": "LookOut3D の「2 doors」シリーズが、あなたの世界に。",
   "modSalvation": "新しいサウンド、画面効果、イベントを加えた Mod のリメイク。",
   "modAlive": "あなたの世界は生きている…そして気づいている。",
-  "modNeighbor": "隣人のジェラルドが、あなたの世界を訪ねてきます。"
+  "modNeighbor": "隣人のジェラルドが、あなたの世界を訪ねてきます。",
+  "Apply locally to all instances": "すべてのインスタンスにローカル適用",
+  "Local appearance restored in every instance.": "すべてのインスタンスでローカルの外見を元に戻しました。",
+  "Skin applied to %1 instances. New instances get it as soon as they are installed; the ones that are open or still installing, when they start.": "%1 個のインスタンスにスキンを適用しました。新しいインスタンスにはインストール完了時に、起動中またはインストール中のものには次回起動時に適用されます。",
+  "Saved as the local skin of all instances: new instances get it as soon as they are installed.": "すべてのインスタンスのローカルスキンとして保存しました。新しいインスタンスにはインストール完了時に適用されます。",
+  "Could not apply it to %1: %2": "%1 には適用できませんでした: %2",
+  "Local skin of all instances: none": "すべてのインスタンスのローカルスキン: なし",
+  "Local skin of all instances: %1": "すべてのインスタンスのローカルスキン: %1"
 }
