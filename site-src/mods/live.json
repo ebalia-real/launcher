@@ -1,7 +1,7 @@
 {
  "format": 1,
- "updated": "2026-10-21T04:02:59Z",
- "downloads": 7033342,
+ "updated": "2026-10-25T20:56:46Z",
+ "downloads": 7120143,
  "published": 8,
  "mods": [
   {
@@ -15,13 +15,13 @@
    "released": "2024-08-12",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/in-your-world",
-    "downloads": 1795828
+    "downloads": 1821128
    },
    "modrinth": {
     "url": "https://modrinth.com/mod/in-your-world",
-    "downloads": 168380
+    "downloads": 169886
    },
-   "downloads": 1964208
+   "downloads": 1991014
   },
   {
    "id": "ooo-jar",
@@ -34,13 +34,13 @@
    "released": "2024-10-26",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar",
-    "downloads": 1425741
+    "downloads": 1433934
    },
    "modrinth": {
     "url": "https://modrinth.com/mod/000.jar",
-    "downloads": 240218
+    "downloads": 241996
    },
-   "downloads": 1665959
+   "downloads": 1675930
   },
   {
    "id": "secret-01-proyect",
@@ -65,9 +65,9 @@
    "released": "2025-11-14",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/disturbed",
-    "downloads": 3305377
+    "downloads": 3347841
    },
-   "downloads": 3305377
+   "downloads": 3347841
   },
   {
    "id": "backrooms-no-exit",
@@ -84,9 +84,9 @@
    "released": "2026-10-12",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/backrooms-no-exit",
-    "downloads": 40674
+    "downloads": 41348
    },
-   "downloads": 40674
+   "downloads": 41348
   },
   {
    "id": "twodoors-jar",
@@ -99,13 +99,13 @@
     "PKFL · LookOut"
    ],
    "summary": "adds the 2 doors series from LookOut3D's to your world",
-   "icon": "https://media.forgecdn.net/avatars/thumbnails/2053/994/256/256/639253000234998623.jpg",
+   "icon": "https://media.forgecdn.net/avatars/thumbnails/2136/378/256/256/639281533982184836.jpg",
    "released": "2026-10-01",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/twodoors-jar",
-    "downloads": 31545
+    "downloads": 35647
    },
-   "downloads": 31545
+   "downloads": 35647
   },
   {
    "id": "salvation-archives-lobotomy-remake",
@@ -122,9 +122,9 @@
    "released": "2026-02-14",
    "modrinth": {
     "url": "https://modrinth.com/mod/salvation-archives-lobotomy-remake",
-    "downloads": 18171
+    "downloads": 18348
    },
-   "downloads": 18171
+   "downloads": 18348
   },
   {
    "id": "the-world-is-alive",
@@ -141,9 +141,9 @@
    "released": "2026-10-03",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/the-world-is-alive",
-    "downloads": 6354
+    "downloads": 7705
    },
-   "downloads": 6354
+   "downloads": 7705
   },
   {
    "id": "neighbor-jar",
@@ -160,9 +160,9 @@
    "released": "2026-10-20",
    "curseforge": {
     "url": "https://www.curseforge.com/minecraft/mc-mods/neighbor-jar",
-    "downloads": 1054
+    "downloads": 2310
    },
-   "downloads": 1054
+   "downloads": 2310
   }
  ]
 }
