@@ -70,6 +70,15 @@ QImage modelTexture(const QImage &src,bool sourceSlim,bool targetSlim){
     }return out;
 }
 }
+namespace {
+QString markFile(const QString &instance){return instance+"/ebalia-local-skin.json";}
+// In a folder of its own, out of the library (skins lists root/skins). 1.2.3's test builds kept it in the library.
+QString defaultFile(const QString &root,const QString &suffix){
+    const auto file=root+"/skins/local/default."+suffix,older=root+"/skins/local-default."+suffix;
+    if(QFile::exists(older)){QDir().mkpath(root+"/skins/local");QFile::remove(file);QFile::rename(older,file);}
+    return file;
+}
+}
 QJsonObject SkinManager::importSkin(const QString &file,const QString &name,const QString &variant){
     if(name.trimmed().isEmpty()||(variant!="classic"&&variant!="slim"))fail("Invalid skin name or model.");auto image=skinImage(file);
     if(image.height()==32&&variant=="slim")fail("Legacy 64 × 32 skins require the Classic model.");
@@ -77,7 +86,9 @@ QJsonObject SkinManager::importSkin(const QString &file,const QString &name,cons
     QDir().mkpath(m_root+"/skins");auto path=m_root+"/skins/"+id+".png";save(path,data);
     QJsonObject entry{{"id",id},{"name",name.trimmed()},{"variant",variant},{"file",path}};ModRepository::write(m_root+"/skins/"+id+".json",entry);return entry;
 }
-QJsonArray SkinManager::skins()const{QJsonArray list;QDir dir(m_root+"/skins");for(const auto &file:dir.entryList({"*.json"},QDir::Files)){auto entry=ModRepository::read(dir.filePath(file));entry["file"]=dir.filePath(QFileInfo(file).completeBaseName()+".png");list.append(entry);}return list;}
+QJsonArray SkinManager::skins()const{QJsonArray list;QDir dir(m_root+"/skins");static const QRegularExpression imported("^[0-9a-f]{64}\\.json$");
+    defaultFile(m_root,"json");defaultFile(m_root,"png"); // moves a skin of all instances out of the library
+    for(const auto &file:dir.entryList({"*.json"},QDir::Files)){if(!imported.match(file).hasMatch())continue;auto entry=ModRepository::read(dir.filePath(file));entry["file"]=dir.filePath(QFileInfo(file).completeBaseName()+".png");list.append(entry);}return list;}
 void SkinManager::removeSkin(const QString &id){
     static const QRegularExpression valid("^[0-9a-f]{64}$");const QDir dir(m_root+"/skins");
     if(!valid.match(id).hasMatch()||!QFile::exists(dir.filePath(id+".json")))fail("Invalid skin.");
@@ -145,13 +156,9 @@ void SkinManager::removeLocal(const QString &instance){
     if(QFile::exists(instance+"/options.txt"))save(instance+"/options.txt",optionsWith(options(instance),false));
     QFile::remove(instance+"/resourcepacks/ebalia-local-skin.zip");
 }
-namespace {
-QString markFile(const QString &instance){return instance+"/ebalia-local-skin.json";}
-QString defaultFile(const QString &root,const QString &suffix){return root+"/skins/local-default."+suffix;}
-}
 void SkinManager::setDefaultLocal(const QString &root,const QString &file,const QString &variant,const QString &name){
     if(variant!="classic"&&variant!="slim")fail("Invalid skin model.");const auto image=skinImage(file);if(image.height()!=64)fail("Local skins require a modern 64 × 64 PNG.");const auto data=png(image);
-    QDir().mkpath(root+"/skins");save(defaultFile(root,"png"),data);
+    QDir().mkpath(root+"/skins/local");save(defaultFile(root,"png"),data);
     const auto stamp=QString::fromLatin1(QCryptographicHash::hash(data+variant.toUtf8(),QCryptographicHash::Sha256).toHex().left(16));
     ModRepository::write(defaultFile(root,"json"),{{"name",name},{"variant",variant},{"stamp",stamp}});
 }

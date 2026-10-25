@@ -704,6 +704,9 @@ private slots:
         QVERIFY(!SkinManager::prepareLocal(root,a,jarPath));QVERIFY(!readFile(a+"/options.txt").contains("ebalia-local-skin"));
         // Restored while it was open: taken off when it starts
         SkinManager::markLocal(a,"restore");QVERIFY(SkinManager::prepareLocal(root,a,jarPath));QCOMPARE(SkinManager::localMode(a),QString("none"));QVERIFY(!QFile::exists(a+"/resourcepacks/ebalia-local-skin.zip"));
+        // Never a copy in the library, also when an older build left it there
+        QCOMPARE(SkinManager(root).skins().size(),0);QFile::rename(root+"/skins/local/default.json",root+"/skins/local-default.json");QFile::rename(root+"/skins/local/default.png",root+"/skins/local-default.png");
+        QCOMPARE(SkinManager(root).skins().size(),0);QCOMPARE(SkinManager::defaultLocal(root)["name"].toString(),QString("Green"));QVERIFY(!QFile::exists(root+"/skins/local-default.json"));
         // No skin for all: nothing happens
         SkinManager::clearDefaultLocal(root);QVERIFY(SkinManager::defaultLocal(root).isEmpty());const auto later=instance("later");QVERIFY(!SkinManager::prepareLocal(root,later,jarPath));QVERIFY(!QFile::exists(later+"/resourcepacks/ebalia-local-skin.zip"));
     }

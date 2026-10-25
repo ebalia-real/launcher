@@ -934,7 +934,7 @@ private slots:
         QVERIFY(all&&one&&chosen);QCOMPARE(all->text(),Language::key("Apply locally to all instances"));QCOMPARE(chosen->text(),Language::key("Local skin of all instances: none"));
         auto list=window.findChild<QListWidget*>("skinList");QCOMPARE(list->currentRow(),0);
         all->click();QTRY_COMPARE(chosen->text(),Language::key("Local skin of all instances: %1").arg("Blue"));
-        QVERIFY(QFile::exists(data.path()+"/skins/local-default.png"));QCOMPARE(SkinManager::defaultLocal(data.path())["variant"].toString(),QString("classic"));
+        QVERIFY(QFile::exists(data.path()+"/skins/local/default.png"));QCOMPARE(list->count(),1);QCOMPARE(SkinManager(data.path()).skins().size(),1); // not a second copy in the libraryQCOMPARE(SkinManager::defaultLocal(data.path())["variant"].toString(),QString("classic"));
         if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);window.grab().save(out+"/skins-all-instances.png");}
         // Restore → All instances: no skin for all any more
         QTimer::singleShot(300,&window,[]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QInputDialog*>(w);d&&d->isVisible()){QCOMPARE(d->comboBoxItems().value(0),Language::key("All instances"));d->setTextValue(Language::key("All instances"));d->accept();}});
