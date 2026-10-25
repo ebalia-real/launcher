@@ -39,8 +39,10 @@
             ctest --output-on-failure
             runHook postCheck
           '';
+          # The games' libraries. Minecraft 26.x (LWJGL 3.4) opens a native Wayland window, whose title bar and borders
+          # GNOME leaves to the program: GLFW draws them with libdecor.
           qtWrapperArgs = [ "--set" "EBALIA_JAVA_PATHS" "${pkgs.jdk8}/bin/java:${pkgs.jdk17}/bin/java:${pkgs.jdk21}/bin/java:${pkgs.jdk25}/bin/java"
-            "--prefix" "LD_LIBRARY_PATH" ":" "/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [ pkgs.libglvnd pkgs.alsa-lib pkgs.libpulseaudio pkgs.libx11 pkgs.libxcursor pkgs.libxext pkgs.libxrandr pkgs.libxrender pkgs.libxxf86vm pkgs.stdenv.cc.cc.lib ]}"
+            "--prefix" "LD_LIBRARY_PATH" ":" "/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [ pkgs.libglvnd pkgs.alsa-lib pkgs.libpulseaudio pkgs.libx11 pkgs.libxcursor pkgs.libxext pkgs.libxrandr pkgs.libxrender pkgs.libxxf86vm pkgs.wayland pkgs.libxkbcommon pkgs.libdecor pkgs.stdenv.cc.cc.lib ]}"
           ];
 
           meta = with pkgs.lib; {
